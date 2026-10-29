@@ -1,0 +1,83 @@
+/** What the backend's /api/analyze returns. The backend (Django) is the source of truth for these shapes. */
+
+export type Layer = 'frontend' | 'backend' | 'database' | 'tests';
+
+export interface FileInfo {
+  path: string;
+  lines: number;
+  ext: string;
+  layer: Layer;
+}
+
+export interface Feature {
+  id: string;
+  name: string;
+  /** A feature is part of the app; the database is its own building. */
+  kind: 'feature' | 'database';
+  /** A short path that names the feature, like `frontend/CartPage`. */
+  path: string;
+  files: FileInfo[];
+  /** How many of its files are in each layer. */
+  layers: Record<Layer, number>;
+}
+
+export interface Stack {
+  frontend: string[];
+  backend: string[];
+  database: string[];
+  services: string[];
+  languages: string[];
+}
+
+export interface AnalysisStep {
+  step: string;
+  label: string;
+  detail: string;
+  ms: number;
+}
+
+export type LinkKind = 'calls' | 'imports' | 'stores' | 'uses' | 'tests';
+
+/** One link between two buildings. A building is `<feature id>:<layer>`, the database is `database:database`, a service is `svc-<name>:backend`. */
+export interface Connection {
+  from: string;
+  to: string;
+  kind: LinkKind;
+  weight: number;
+}
+
+/** A command the project itself uses to test, lint, type check or build, and the folder it runs in ('' for the project folder). */
+export interface RunCommand {
+  id: string;
+  kind: 'test' | 'lint' | 'typecheck' | 'build';
+  label: string;
+  command: string;
+  cwd: string;
+}
+
+/** One test case written in a test file. */
+export interface TestCase {
+  file: string;
+  name: string;
+  line: number;
+  cwd: string;
+}
+
+export interface Analysis {
+  name: string;
+  /** The name the project gives itself, from its README or package file. */
+  title: string;
+  summary: string;
+  root: string;
+  kind: string;
+  stackLine: string;
+  stack: Stack;
+  layers: Record<Layer, number>;
+  features: Feature[];
+  connections: Connection[];
+  commands: RunCommand[];
+  tests: TestCase[];
+  totalFiles: number;
+  truncated: boolean;
+  steps: AnalysisStep[];
+}

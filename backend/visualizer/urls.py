@@ -1,0 +1,29 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("health", views.HealthView.as_view()),
+    path("events", views.EventsView.as_view()),
+    path("hook/claude-code", views.HookClaudeView.as_view()),
+    path("stream", views.StreamView.as_view()),
+    path("api/analyze", views.AnalyzeView.as_view()),
+    path("api/run", views.RunView.as_view()),
+    path("api/git", views.GitView.as_view()),
+    path("api/file", views.FileView.as_view()),
+    path("api/git/changes", views.GitChangesView.as_view()),
+    path("api/git/stage", views.GitStageView.as_view()),
+    path("api/git/commit", views.GitCommitView.as_view()),
+    path("api/git/push", views.GitPushView.as_view()),
+    path("api/agent/send", views.AgentSendView.as_view()),
+    path("api/project/templates", views.TemplatesView.as_view()),
+    path("api/project/new", views.NewProjectView.as_view()),
+    path("api/project/clone", views.CloneView.as_view()),
+    path("api/doctor", views.DoctorView.as_view()),
+    path("api/agent/status", views.AgentStatusView.as_view()),
+    path("api/agent/connect", views.AgentConnectView.as_view()),
+    path("api/agent/disconnect", views.AgentDisconnectView.as_view()),
+    path("api/stop", views.StopView.as_view()),
+    path("api/tools", views.ToolsView.as_view()),
+    path("api/tools/<str:name>", views.ToolCallView.as_view()),
+]

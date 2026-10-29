@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from rest_framework import serializers
+
+
+class FolderSerializer(serializers.Serializer):
+    path = serializers.CharField(error_messages={"required": "Send a folder path", "blank": "Send a folder path"})
+
+    def validate_path(self, value: str) -> str:
+        p = Path(value).expanduser().resolve()
+        if not p.is_dir():
+            raise serializers.ValidationError(f"That folder does not exist: {p}")
+        return str(p)
+
+
+class RunSerializer(serializers.Serializer):
+    command = serializers.CharField(error_messages={"required": "Send a command to run", "blank": "Send a command to run"})
+    cwd = serializers.CharField(error_messages={"required": "Send a folder to run it in", "blank": "Send a folder to run it in"})
+
+    def validate_cwd(self, value: str) -> str:
+        p = Path(value).expanduser().resolve()
+        if not p.is_dir():
+            raise serializers.ValidationError(f"That folder does not exist: {p}")
+        return str(p)
+
+    root = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_root(self, value: str) -> str:
+        if not value:
+            return value
+        p = Path(value).expanduser().resolve()
+        if not p.is_dir():
+            raise serializers.ValidationError(f"That folder does not exist: {p}")
+        return str(p)
+
+    def validate_command(self, value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("Send a command to run")
+        return value
+
+
+class FileSerializer(FolderSerializer):
+    file = serializers.CharField(error_messages={"required": "Send the file to open", "blank": "Send the file to open"})
+
+
+class StageSerializer(FolderSerializer):
+    files = serializers.ListField(child=serializers.CharField(), allow_empty=False, error_messages={"required": "Pick the files", "empty": "Pick the files"})
+    stage = serializers.BooleanField(default=True)
+
+
+class CommitSerializer(FolderSerializer):
+    message = serializers.CharField(allow_blank=True, default="")
+
+
+class PushSerializer(FolderSerializer):
+    setUpstream = serializers.BooleanField(default=False)
+
+
+class AgentSerializer(FolderSerializer):
+    prompt = serializers.CharField(error_messages={"required": "Write what you want done", "blank": "Write what you want done"})
+    model = serializers.CharField(required=False, allow_blank=True, default="")
+    acceptEdits = serializers.BooleanField(default=True)
+
+
+class NewProjectSerializer(serializers.Serializer):
+    parent = serializers.CharField(error_messages={"required": "Choose where to put the project", "blank": "Choose where to put the project"})
+    name = serializers.CharField(error_messages={"required": "Give the project a name", "blank": "Give the project a name"})
+    template = serializers.CharField(default="empty")
+
+
+class CloneSerializer(serializers.Serializer):
+    parent = serializers.CharField(error_messages={"required": "Choose where to put the project", "blank": "Choose where to put the project"})
+    url = serializers.CharField(error_messages={"required": "Paste a repository link", "blank": "Paste a repository link"})

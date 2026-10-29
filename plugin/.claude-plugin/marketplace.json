@@ -1,0 +1,11 @@
+{
+  "name": "code-visualizer",
+  "owner": { "name": "Codeville" },
+  "plugins": [
+    {
+      "name": "code-visualizer",
+      "source": "./code-visualizer",
+      "description": "Sends what Claude Code does to the Codeville app on your computer."
+    }
+  ]
+}

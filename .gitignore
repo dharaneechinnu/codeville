@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+*.log
+*.err
+backend/.venv/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/*.sqlite3
+build/
+release/
+.claude/
+.env
+.env.*

@@ -1,0 +1,95 @@
+{
+  "name": "code-visualizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "See what your coding agent builds: a Windows app with a live block-town visualizer.",
+  "author": "Codeville",
+  "type": "module",
+  "main": "dist/main/main.cjs",
+  "scripts": {
+    "test": "cd backend && .venv\\Scripts\\python.exe -m pytest -q",
+    "typecheck": "tsc --noEmit",
+    "backend": "cd backend && .venv\\Scripts\\python.exe serve.py",
+    "dev:ui": "vite --port 5180 --strictPort",
+    "build:main": "esbuild src/main/main.ts src/main/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=dist/main --out-extension:.js=.cjs",
+    "build:ui": "vite build",
+    "build": "npm run build:main && npm run build:ui",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && npm run prepare:python && electron-builder --win",
+    "prepare:python": "node scripts/prepare-python.mjs",
+    "dist:dir": "npm run build && npm run prepare:python && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  },
+  "build": {
+    "appId": "com.codevisualizer.app",
+    "productName": "Codeville",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!.venv/**",
+          "!**/__pycache__/**",
+          "!tests/**",
+          "!*.sqlite3",
+          "!python/**",
+          "!pytest.ini",
+          "!conftest.py"
+        ]
+      },
+      {
+        "from": "build/python",
+        "to": "backend/python"
+      },
+      {
+        "from": "plugin",
+        "to": "plugin",
+        "filter": [
+          "**/*",
+          "!**/node_modules/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "artifactName": "Codeville-Setup-${version}.exe"
+    }
+  }
+}
