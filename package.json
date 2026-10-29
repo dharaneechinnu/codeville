@@ -10,16 +10,19 @@
     "test": "cd backend && .venv\\Scripts\\python.exe -m pytest -q",
     "typecheck": "tsc --noEmit",
     "backend": "cd backend && .venv\\Scripts\\python.exe serve.py",
-    "dev:ui": "vite --port 5180 --strictPort",
+    "dev:ui": "npm run prepare:gestures && vite --port 5180 --strictPort",
     "build:main": "esbuild src/main/main.ts src/main/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=dist/main --out-extension:.js=.cjs",
-    "build:ui": "vite build",
+    "build:ui": "npm run prepare:gestures && vite build",
     "build": "npm run build:main && npm run build:ui",
     "start": "npm run build && electron .",
     "dist": "npm run build && npm run prepare:python && electron-builder --win",
     "prepare:python": "node scripts/prepare-python.mjs",
-    "dist:dir": "npm run build && npm run prepare:python && electron-builder --win --dir"
+    "dist:dir": "npm run build && npm run prepare:python && electron-builder --win --dir",
+    "prepare:gestures": "node scripts/prepare-gestures.mjs",
+    "test:gestures": "node scripts/test-gestures.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.21",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.169.0"

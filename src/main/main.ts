@@ -1,8 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+// The packaged UI is served from app:// instead of file://, so the hand tracking runtime and model can be fetched.
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
+
+const MIME: Record<string, string> = { '.wasm': 'application/wasm', '.js': 'text/javascript', '.task': 'application/octet-stream' };
 
 let win: BrowserWindow | null = null;
 let backend: ChildProcess | null = null;
@@ -75,8 +81,37 @@ async function startBackend(): Promise<Config> {
   return Promise.race([ready, failed]);
 }
 
+/** Serves the built UI folder. Anything outside it is refused. */
+function serveUi(): void {
+  const ui = resolve(__dirname, '../renderer');
+  protocol.handle('app', async (req) => {
+    const rel = decodeURIComponent(new URL(req.url).pathname);
+    const full = resolve(ui, '.' + rel);
+    if (full !== ui && !full.startsWith(ui + sep)) return new Response('Not found', { status: 404 });
+    const res = await net.fetch(pathToFileURL(full).toString());
+    const type = MIME[extname(full)];
+    return type ? new Response(res.body, { status: res.status, headers: { 'content-type': type } }) : res;
+  });
+}
+
+/** The only permission the window may ask for is the camera (video, never the microphone), for hand gestures. */
+function limitPermissions(): void {
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
+    callback(wc === win?.webContents && permission === 'media' && types.length > 0 && types.every((t) => t === 'video'));
+  });
+  ses.setPermissionCheckHandler((_wc, permission, origin, details) => {
+    // Chromium also asks this while a stream is open, sometimes with no window and no kind of media, so only the
+    // microphone and other pages are refused here.
+    const type = (details as { mediaType?: string }).mediaType;
+    return permission === 'media' && type !== 'audio' && /^(app:\/\/codeville|http:\/\/(localhost|127\.0\.0\.1):5180)/.test(origin);
+  });
+}
+
 async function start(): Promise<void> {
   const cfg = await startBackend();
+  limitPermissions();
   win = new BrowserWindow({
     width: 1480,
     height: 920,
@@ -101,7 +136,10 @@ async function start(): Promise<void> {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
   if (process.env.CV_DEV) await win.loadURL(process.env.CV_DEV_URL ?? 'http://localhost:5180');
-  else await win.loadFile(join(__dirname, '../renderer/index.html'));
+  else {
+    serveUi();
+    await win.loadURL('app://codeville/index.html');
+  }
   win.on('closed', () => {
     win = null;
   });

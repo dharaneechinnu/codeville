@@ -56,6 +56,9 @@ def test_other_sites_and_spoofed_hosts_are_refused(auth):
     ok = auth.get("/health", HTTP_ORIGIN="null")
     assert ok.status_code == 200 and ok["Access-Control-Allow-Origin"] == "null"
     assert auth.get("/health", HTTP_ORIGIN="http://localhost:5180").status_code == 200
+    app = auth.get("/health", HTTP_ORIGIN="app://codeville")
+    assert app.status_code == 200 and app["Access-Control-Allow-Origin"] == "app://codeville"
+    assert auth.get("/health", HTTP_ORIGIN="app://evil").status_code == 403
 
 
 def test_good_events_are_accepted_and_bad_ones_rejected(auth):

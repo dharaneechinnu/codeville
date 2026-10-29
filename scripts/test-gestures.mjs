@@ -1,0 +1,69 @@
+// Checks the hand gesture rules with made-up hand landmarks (no camera needed): npm run test:gestures
+import { build } from 'esbuild';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const out = join(mkdtempSync(join(tmpdir(), 'cv-gesture-')), 'gesture.mjs');
+await build({ entryPoints: ['src/renderer/gesture.ts'], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'error' });
+const { GestureInterpreter, poseOf } = await import(pathToFileURL(out).href);
+const P = (x, y) => ({ x, y, z: 0 });
+function hand(cx, cy, pose) {
+  const h = Array.from({ length: 21 }, () => P(cx, cy));
+  h[0] = P(cx, cy + 0.15);
+  [[5, -.06], [9, -.02], [13, .02], [17, .06]].forEach(([i, dx]) => (h[i] = P(cx + dx, cy)));
+  const fing = [[6, 8, 5], [10, 12, 9], [14, 16, 13], [18, 20, 17]];
+  fing.forEach(([pip, tip, base]) => {
+    const bx = h[base].x;
+    h[pip] = P(bx, cy - 0.05);
+    h[tip] = pose === 'fist' ? P(bx, cy + 0.06) : P(bx, cy - 0.12);
+  });
+  h[4] = pose === 'pinch' ? P(cx - 0.055, cy - 0.12) : P(cx + 0.12, cy + 0.03);
+  if (pose === 'pinch') h[8] = P(cx - 0.055, cy - 0.12);
+  return h;
+}
+let ok = true;
+const check = (n, c) => { console.log(c ? 'PASS' : 'FAIL', n); if (!c) ok = false; };
+check('open pose', poseOf(hand(.5, .5, 'open')) === 'open');
+check('fist pose', poseOf(hand(.5, .5, 'fist')) === 'fist');
+check('pinch pose', poseOf(hand(.5, .5, 'pinch')) === 'pinch');
+
+// Rotate: a hand moving right (raw x decreasing, since the camera is not mirrored) gives negative yaw
+let g = new GestureInterpreter(), t = 0, yaw = 0, tilt = 0, mode = '';
+for (let i = 0; i < 20; i++) { const f = g.update([hand(.6 - i * .01, .5, 'open')], (t += 33)); yaw += f.yaw; mode = f.mode; }
+check('rotate mode', mode === 'rotate'); check('moving right turns yaw negative', yaw < -0.3);
+g = new GestureInterpreter(); t = 0; tilt = 0;
+for (let i = 0; i < 20; i++) { const f = g.update([hand(.5, .6 - i * .01, 'open')], (t += 33)); tilt += f.tilt; }
+check('moving up tilts positive', tilt > 0.1);
+// Still hand: no motion
+g = new GestureInterpreter(); t = 0; let mv = 0;
+for (let i = 0; i < 30; i++) { const f = g.update([hand(.5, .5, 'open')], (t += 33)); mv += Math.abs(f.yaw) + Math.abs(f.tilt); }
+check('still hand does not move the town', mv < 0.01);
+// Zoom: hands apart => zoom factor < 1; together => > 1
+g = new GestureInterpreter(); t = 0; let z = 1;
+for (let i = 0; i < 20; i++) { const f = g.update([hand(.35 - i * .006, .5, 'open'), hand(.65 + i * .006, .5, 'open')], (t += 33)); z *= f.zoom; }
+check('hands apart zoom in (<1)', z < 0.8);
+g = new GestureInterpreter(); t = 0; z = 1;
+for (let i = 0; i < 20; i++) { const f = g.update([hand(.2 + i * .01, .5, 'open'), hand(.8 - i * .01, .5, 'open')], (t += 33)); z *= f.zoom; }
+check('hands together zoom out (>1)', z > 1.25);
+// Fist holds
+g = new GestureInterpreter(); t = 0; mode = '';
+for (let i = 0; i < 10; i++) { const f = g.update([hand(.5 - i * .02, .5, 'fist')], (t += 33)); mode = f.mode; }
+check('fist holds', mode === 'hold');
+// Double pinch resets once
+g = new GestureInterpreter(); t = 0; let resets = 0;
+const seq = ['open','open','open','pinch','pinch','pinch','pinch','open','open','open','open','pinch','pinch','pinch','pinch','open','open','open'];
+for (const p of seq) { const f = g.update([hand(.5, .5, p)], (t += 40)); if (f.reset) resets++; }
+check('double pinch resets once', resets === 1);
+// Single pinch does not
+g = new GestureInterpreter(); t = 0; resets = 0;
+for (const p of ['open','open','open','pinch','pinch','pinch','pinch','open','open','open','open']) { const f = g.update([hand(.5, .5, p)], (t += 40)); if (f.reset) resets++; }
+check('single pinch does not reset', resets === 0);
+// Hand lost then returns without a jump
+g = new GestureInterpreter(); t = 0;
+for (let i = 0; i < 5; i++) g.update([hand(.3, .5, 'open')], (t += 33));
+for (let i = 0; i < 10; i++) g.update([], (t += 33));
+const back = g.update([hand(.8, .5, 'open')], (t += 33));
+check('no jump when the hand returns', back.yaw === 0 && back.tilt === 0);
+process.exit(ok ? 0 : 1);

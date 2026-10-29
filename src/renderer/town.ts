@@ -97,9 +97,11 @@ export class Town {
   private selected: Floor | null = null;
   private center = new THREE.Vector3();
   private extent = 16;
+  private holo = false;
+  private fog: THREE.Fog | null = null;
 
   constructor(private host: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor('#0a0c16');
     host.appendChild(this.renderer.domElement);
@@ -109,7 +111,8 @@ export class Town {
     this.labels.className = 'cv-labels';
     host.appendChild(this.labels);
 
-    this.scene.fog = new THREE.Fog('#0a0c16', 60, 160);
+    this.fog = new THREE.Fog('#0a0c16', 60, 160);
+    this.scene.fog = this.fog;
     this.scene.add(new THREE.HemisphereLight('#bcd0ff', '#1b1330', 1.1));
     const sun = new THREE.DirectionalLight('#ffffff', 1.6);
     sun.position.set(18, 30, 12);
@@ -223,6 +226,38 @@ export class Town {
     this.center.set(xC, 3, (zMin + zMax) / 2);
     this.buildLinks(a?.connections ?? []);
     this.overview();
+    this.applyHologram();
+  }
+
+  /** Hologram look: the town turns see-through with glowing outlines, so a camera picture can show behind it. */
+  setHologram(on: boolean): void {
+    this.holo = on;
+    this.applyHologram();
+  }
+
+  private applyHologram(): void {
+    const on = this.holo;
+    this.renderer.setClearColor('#0a0c16', on ? 0 : 1);
+    this.scene.fog = on ? null : this.fog;
+    this.scene.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      if (o.userData.ground) o.visible = !on || !(o.geometry instanceof THREE.BoxGeometry);
+      if (!o.userData.floor) return;
+      const mat = o.material as THREE.MeshStandardMaterial;
+      mat.transparent = on;
+      mat.opacity = on ? 0.42 : 1;
+      mat.depthWrite = !on;
+      let edges = o.getObjectByName('holo-edges') as THREE.LineSegments | undefined;
+      if (on && !edges) {
+        edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry), new THREE.LineBasicMaterial({ color: '#5cf2ff', transparent: true, opacity: 0.95 }));
+        edges.name = 'holo-edges';
+        o.add(edges);
+      }
+      if (edges) edges.visible = on;
+    });
+    this.scene.traverse((o) => {
+      if (o instanceof THREE.GridHelper) (o.material as THREE.LineBasicMaterial).color.set(on ? '#2fd6ee' : '#2d3361');
+    });
   }
 
   // ------------------------------------------------------------------------------------------ links

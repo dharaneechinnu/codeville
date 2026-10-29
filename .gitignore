@@ -12,3 +12,4 @@ release/
 .claude/
 .env
 .env.*
+src/renderer/public/mediapipe/

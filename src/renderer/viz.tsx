@@ -4,6 +4,7 @@ import { useCv } from './state.js';
 import { TestStage, type StageStep } from './teststage.js';
 import { Ico } from './icons.js';
 import type { Analysis, LinkKind } from '../shared/types.js';
+import { GestureLayer } from './gesturelayer.js';
 import { LAYER_COLOR, LINK_COLOR, Town, type LinkMode, type Pick } from './town.js';
 
 const OPEN_ICON = (
@@ -202,6 +203,7 @@ function BuildView(): JSX.Element {
   const [webgl, setWebgl] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
   const [mode, setMode] = useState<LinkMode>('main');
+  const [hands, setHands] = useState(false);
 
   useEffect(() => {
     if (!host.current) return;
@@ -239,8 +241,9 @@ function BuildView(): JSX.Element {
   const shown = selected ?? pick?.path ?? null;
 
   return (
-    <div className="stage">
+    <div className={`stage${hands ? ' holo' : ''}`}>
       <div className="viewport" ref={host} />
+      {hands && <GestureLayer getTown={() => townRef.current} onClose={() => setHands(false)} />}
       {!webgl && <div className="nogl">This computer cannot draw the 3D town. The Test view and the lists still work.</div>}
       <div className="tools" role="toolbar" aria-label="View controls">
         <button onClick={() => t()?.rotate(-Math.PI / 4)} title="Rotate left" aria-label="Rotate left"><Ico name="rotateLeft" /></button>
@@ -251,6 +254,7 @@ function BuildView(): JSX.Element {
         <button onClick={() => t()?.zoom(1.25)} title="Zoom out" aria-label="Zoom out"><Ico name="minus" /></button>
         <button onClick={() => t()?.overview()} title="Reset the view" aria-label="Reset the view"><Ico name="home" /></button>
         <button onClick={() => t()?.wholeProject()} title="See the whole project from above" aria-label="Whole project"><Ico name="whole" /></button>
+        <button className={hands ? 'on' : ''} onClick={() => setHands(!hands)} title="Hand control: move and zoom the town with your hand in front of the camera" aria-label="Hand control" aria-pressed={hands}><Ico name="hand" /></button>
         <button className="modebtn" onClick={() => setMode(NEXT_MODE[mode])} title={`${MODE_NAME[mode]}. Click to change: main links, all links, or none.`} aria-label={MODE_NAME[mode]}><Ico name="links" /><em>{mode}</em></button>
       </div>
       {shown && (

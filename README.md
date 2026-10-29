@@ -120,6 +120,23 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 Errors come back as `{"error": "..."}`, and for git and project actions also as a `problem`: what broke, why, the file and
 line if any, and what to do next.
 
+## Hand control (hologram)
+
+The hand icon in the Build view's toolbar turns on the camera and switches the town to a hologram look: see-through
+buildings with glowing outlines over a faint picture of the camera. Hands are tracked by Google's MediaPipe Hand
+Landmarker (Apache 2.0). The runtime and the model are bundled and run on this computer, so no camera picture leaves it.
+
+| Gesture | What it does |
+|---|---|
+| Open palm, moved around | Turns and tilts the town |
+| Two open hands, moved apart or together | Zoom in or out |
+| Fist | Hold still, nothing moves |
+| Two quick pinches (thumb and finger) | Reset the view |
+
+`npm run prepare:gestures` copies the runtime and downloads the model (about 8 MB) once; `dev:ui` and `build:ui` run it.
+`npm run test:gestures` checks the gesture rules with made-up hand points. If the camera is blocked, turn it on in Windows
+Settings, Privacy and security, Camera, for desktop apps. The window is now served from `app://codeville` instead of a file.
+
 ## Not done yet
 
 Per-feature test steps drawn as the shopper's route (login, cart, payment, admin), code signing, an app icon, and

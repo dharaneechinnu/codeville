@@ -16,12 +16,12 @@ from rest_framework.response import Response
 from .config import load_config
 
 HOST_OK = re.compile(r"^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$")
-# The packaged app loads from a file (origin "null"). During development the page runs on a local port.
+# The packaged app is served from app://codeville (older builds loaded a file, origin "null"). During development the page runs on a local port.
 DEV_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1):51(7\d|8\d|9\d)$")
 
 
 def origin_allowed(origin: str) -> bool:
-    return origin == "null" or bool(DEV_ORIGIN.match(origin))
+    return origin in ("null", "app://codeville") or bool(DEV_ORIGIN.match(origin))
 
 
 class GuardMiddleware:
