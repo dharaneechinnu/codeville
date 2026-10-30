@@ -2,7 +2,7 @@
 
 [![Codeville launch video](promo/preview.gif)](promo/launch.mp4)
 
-**Built for vibe coders: your prompts, made visual.** Watch the [30-second launch film](promo/launch.mp4), the
+**Built for vibe coders: your prompts, made visual.** Watch the [narrated launch film](promo/launch.mp4) (58 s), the
 [15-second social cut](promo/social.mp4) or the [narrated demo of the real app](promo/demo.mp4), or see the
 [launch site](https://dharaneechinnu.github.io/codeville/) (source in `site/`). [Download for Windows](https://github.com/dharaneechinnu/codeville/releases).
 
@@ -153,7 +153,7 @@ locally, copy the films the same way and open `site/index.html`.
 
 ## Promo videos
 
-`promo/` holds the launch film (30 s), a 15 s social cut, the narrated demo (2:14), the launch page and the code that makes them. Both videos show
+`promo/` holds the narrated launch film (58 s), a 15 s social cut, the narrated demo (2:14), the launch page and the code that makes them. Both videos show
 the **real app**: the React and three.js UI talking to the real Django backend, opening a real sample project, running
 its real tests and pushing to a real git remote, recorded in Chromium. Two inputs are scripted for the recording, and the
 videos say so on screen: the agent (`promo/capture/bin/claude` stands in for `claude -p`; it writes real files and sends
@@ -184,6 +184,12 @@ The pro cuts (`launch.mp4`, `social.mp4`, `demo.mp4`) are built by `promo/render
 `node render.mjs pro-launch --shots <shots dir> --out ../launch.mp4` (and `pro-social`), and for the demo
 `node render.mjs pro-demo --out pro-demo-frame.mp4 && python ../capture/mux.py <rec dir> pro-demo-frame.mp4 ../demo.mp4 pro`.
 `node music_pro.mjs` writes their soundtracks; their voiceover lines are in `pro_voice.json`.
+
+The narrated launch film (hook, why, what, five moments when you use it, close) is planned from its script by
+`promo/capture/film_plan.py`: it speaks each line with Kokoro (voice `af_heart`), sizes every scene to its narration,
+and writes `promo/render/film_timeline.js`, the voice track, `site/media/launch.vtt` and the recorded shots. Then
+`node music_pro.mjs` and `node render.mjs pro-film --shots <shots dir> --out ../launch.mp4` (`film.js` draws it, captions
+burned in). `voice.py --vtt` writes the demo's and social cut's caption files the same way.
 
 ## Not done yet
 

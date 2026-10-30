@@ -40,6 +40,7 @@ ap.add_argument("--voice", default="am_michael")
 ap.add_argument("--speed", type=float, default=1.05)
 ap.add_argument("--duration", type=float, default=100.5)
 ap.add_argument("--script", help="a JSON file {duration, lines: [[seconds, text]]} to speak instead of LINES (compose.py writes real_voice.json)")
+ap.add_argument("--vtt", help="also write WebVTT captions here, one sentence per cue")
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "audio", "demo-voice.wav"))
 args = ap.parse_args()
 if args.script:
@@ -51,6 +52,7 @@ kokoro = Kokoro(args.model, args.voices)
 sr = 24000
 track = np.zeros(int(args.duration * sr), dtype=np.float32)
 free_at = 0.0
+cues = []
 for start, line in LINES:
     samples, sr_ = kokoro.create(line, voice=args.voice, speed=args.speed, lang="en-us")
     assert sr_ == sr
@@ -61,7 +63,23 @@ for start, line in LINES:
     end = min(len(track), a + len(samples))
     track[a:end] += samples[: end - a]
     free_at = start + len(samples) / sr + 0.25
+    cues.append((start, len(samples) / sr, line))
     print(f"{start:5.1f}s  {len(samples) / sr:4.1f}s  {line}")
 track *= 0.95 / max(1e-6, np.abs(track).max())
 sf.write(args.out, track, sr)
+if args.vtt:
+    import re
+
+    def stamp(x):
+        return f"{int(x // 3600):02d}:{int(x % 3600 // 60):02d}:{x % 60:06.3f}"
+
+    out = ["WEBVTT", ""]
+    for start, dur, line in cues:
+        parts = [p for p in re.split(r"(?<=[.?!:])\s+", line) if p]
+        total, c = sum(len(p) for p in parts), start
+        for p in parts:
+            d = dur * len(p) / total
+            out += [f"{stamp(c)} --> {stamp(c + d)}", p, ""]
+            c += d
+    open(args.vtt, "w").write("\n".join(out))
 print("wrote", args.out)

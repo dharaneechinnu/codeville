@@ -139,6 +139,9 @@ function pump(T, from = 0) {
 // The cut points come from pro.js (CV.PRO), so the music lands on the same beats as the picture.
 const src = readFileSync(path.join(here, 'pro_timeline.js'), 'utf8');
 const P = JSON.parse(src.slice(src.indexOf('{'), src.lastIndexOf('}') + 1));
+// The narrated launch film plans its own cues (film_plan.py).
+const filmSrc = readFileSync(path.join(here, 'film_timeline.js'), 'utf8');
+P.music['pro-film'] = { ...JSON.parse(filmSrc.slice(filmSrc.indexOf('{'), filmSrc.lastIndexOf('}') + 1)).music, quiet: true };
 
 for (const [name, cfg] of Object.entries(P.music)) {
   const T = track(cfg.dur);

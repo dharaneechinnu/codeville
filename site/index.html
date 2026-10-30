@@ -152,6 +152,41 @@
   footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 30px; justify-content: space-between; align-items: center; }
   footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
 
+
+  /* film player: chapters + live transcript */
+  .player { max-width: 1040px; margin: 22px auto 0; display: grid; gap: 14px; text-align: left; }
+  .rail { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+  .rail button { all: unset; cursor: pointer; flex: 1 0 auto; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font: 600 14px var(--f-body); color: var(--muted); position: relative; overflow: hidden; }
+  .rail button span { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--blue); width: 0; }
+  .rail button[aria-current="true"] { color: var(--ink); border-color: var(--blue); }
+  .rail button:focus-visible, .tabs button:focus-visible, .transcript button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  .transcript { display: flex; flex-wrap: wrap; align-content: flex-start; max-height: 168px; overflow-y: auto; scroll-behavior: smooth; gap: 4px 6px; font-size: 17px; line-height: 1.7; color: var(--muted); background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .transcript button { all: unset; cursor: pointer; border-radius: 6px; padding: 0 3px; }
+  .transcript button:hover { color: var(--ink); }
+  .transcript button.now { color: var(--ink); background: color-mix(in srgb, var(--blue) 16%, transparent); }
+
+  /* why */
+  .whys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .why { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px; min-width: 0; }
+  .why .prob { display: block; font: 600 16px var(--f-body); color: var(--red); margin-bottom: 14px; }
+  .why h3 { font-size: 30px; margin-bottom: 10px; }
+  .why p { color: var(--muted); margin: 0; font-size: 17px; }
+
+  /* when do I use it */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+  .tabs button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px 12px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font: 600 16px var(--f-body); color: var(--muted); }
+  .tabs button b { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-2); font: 12px var(--f-pixel); color: var(--muted); }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--c); box-shadow: 0 8px 24px -12px var(--c); }
+  .tabs button[aria-selected="true"] b { background: var(--c); color: #fff; }
+  .panel { display: grid; grid-template-columns: 1fr 1.35fr; gap: 48px; align-items: center; }
+  .panel .copy { min-width: 0; }
+  .panel .tag { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--f-body); color: var(--muted); }
+  .panel .tag::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--blue)); }
+  .panel h3 { font-size: clamp(30px, 3.6vw, 44px); margin: 12px 0 18px; }
+  .panel dl { margin: 0; display: grid; gap: 4px; }
+  .panel dt { font: 600 13px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 14px; }
+  .panel dd { margin: 0; font-size: 17px; }
+  @media (max-width: 900px) { .whys { grid-template-columns: 1fr; } .panel { grid-template-columns: 1fr; gap: 24px; } }
   @media (max-width: 900px) {
     nav.links { display: none; }
     .feature, .feature.flip, .film { grid-template-columns: 1fr; gap: 28px; }
@@ -173,7 +208,7 @@
       Codeville
     </a>
     <nav class="links" aria-label="Sections">
-      <a href="#features">Features</a><a href="#film">Demo</a><a href="#start">Get started</a><a href="#faq">FAQ</a>
+      <a href="#why">Why</a><a href="#features">When</a><a href="#film">Demo</a><a href="#start">Get started</a><a href="#faq">FAQ</a>
     </nav>
     <a class="btn primary small" href="https://github.com/dharaneechinnu/codeville/releases">Download</a>
   </div>
@@ -195,79 +230,59 @@
       </div>
       <p class="note">For Windows · Python is bundled · Works with Claude Code</p>
       <div class="laptop">
-        <div class="screen"><video id="hero-film" src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="metadata" aria-label="Codeville launch film, 30 seconds"></video></div>
+        <div class="screen"><video id="hero-film" src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="metadata" aria-label="Codeville launch film, 58 seconds, narrated"><track kind="captions" src="media/launch.vtt" srclang="en" label="English"></video></div>
         <div class="base" aria-hidden="true"></div>
+      </div>
+      <div class="player" aria-label="Launch film chapters and transcript">
+        <div class="rail" id="film-rail" role="list"></div>
+        <div class="transcript" id="film-transcript" aria-live="off"></div>
       </div>
       <div class="works" aria-label="What it works with"><span>Works with <b>Claude Code</b></span><span><b>Git</b> built in</span><span><b>React</b>, <b>Django</b>, <b>Node</b> and <b>Python</b> projects</span><span>Runs on <b>your PC</b></span></div>
     </div>
   </div>
 
+  <section id="why">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>WHY CODEVILLE</span>
+        <h2>Vibe coding is fast. Knowing what you shipped isn't.</h2>
+        <p>Your agent writes dozens of files a minute. Codeville is the view that keeps up.</p>
+      </div>
+      <div class="whys">
+        <div class="why"><span class="prob">“I can't read every diff.”</span><h3>See it instead.</h3><p>Your project becomes a town: a district per feature, a block per file. New files light up as they are written.</p></div>
+        <div class="why"><span class="prob">“Something broke. Where?”</span><h3>Follow the shopper.</h3><p>Tests run as a walk through your app. It stops at the step that broke and names the file and the fix.</p></div>
+        <div class="why"><span class="prob">“What did my agent touch?”</span><h3>Watch it live.</h3><p>Every edit, tool call and sub-agent from Claude Code shows up in the chat and in the town while it works.</p></div>
+      </div>
+    </div>
+  </section>
+
   <section id="features" class="alt">
     <div class="wrap">
       <div class="head">
-        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>THE TOUR</span>
-        <h2>Your prompts, made visual.</h2>
-        <p>Every clip below is the real app, recorded on a sample online store.</p>
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>WHEN DO I USE IT?</span>
+        <h2>Five moments in your day.</h2>
+        <p>Pick one. Every clip is the real app, recorded on a sample online store.</p>
       </div>
-
-      <div class="feature" style="--c:var(--blue)">
-        <div class="copy">
-          <span class="tag">Block town</span>
-          <h3>Every feature, a district. Every file, a block.</h3>
-          <p>Open a project and Codeville draws it as a town: one district per feature, one building per layer, one block per file.</p>
-          <ul><li>Frontend, backend, tests, database and outside services, each in its own colour</li><li>Links show calls, imports and database use, with packets moving along them</li><li>Click a block to see the file and open it in the editor</li></ul>
+      <div class="usecases">
+        <div class="tabs" role="tablist" aria-label="Moments">
+          <button role="tab" id="tab-open" aria-controls="uc-panel" aria-selected="true" data-uc="open" style="--c:var(--yellow)"><b>1</b>You open a project</button>
+          <button role="tab" id="tab-prompt" aria-controls="uc-panel" aria-selected="false" data-uc="prompt" style="--c:var(--green)"><b>2</b>You prompt Claude Code</button>
+          <button role="tab" id="tab-test" aria-controls="uc-panel" aria-selected="false" data-uc="test" style="--c:var(--red)"><b>3</b>Your tests fail</button>
+          <button role="tab" id="tab-ship" aria-controls="uc-panel" aria-selected="false" data-uc="ship" style="--c:var(--blue)"><b>4</b>You're ready to ship</button>
+          <button role="tab" id="tab-holo" aria-controls="uc-panel" aria-selected="false" data-uc="holo" style="--c:var(--cyan)"><b>5</b>You show it off</button>
         </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-town.mp4" poster="media/clip-town.jpg" autoplay muted loop playsinline aria-label="The block town rotating"></video></div>
-      </div>
-
-      <div class="feature flip" style="--c:var(--green)">
-        <div class="copy">
-          <span class="tag">Prompt it</span>
-          <h3>Type a prompt. Watch it build.</h3>
-          <p>Send a prompt to Claude Code from the chat. Every edit, tool call and sub-agent shows up as it happens, and new files land in the town as they are written.</p>
-          <ul><li>Runs in the folder you opened, with your own Claude Code settings</li><li>Each file write pulses on its building</li><li>The changes list fills in for review</li></ul>
+        <div class="panel" id="uc-panel" role="tabpanel" aria-labelledby="tab-open">
+          <div class="copy">
+            <span class="tag" id="uc-tag">Project analysis and block town</span>
+            <h3 id="uc-title">Know a project in seconds.</h3>
+            <dl>
+              <dt>What happens</dt><dd id="uc-what"></dd>
+              <dt>Why it helps</dt><dd id="uc-why"></dd>
+              <dt>Try it</dt><dd id="uc-how"></dd>
+            </dl>
+          </div>
+          <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video id="uc-video" src="media/clip-analysis.mp4" poster="media/clip-analysis.jpg" autoplay muted loop playsinline aria-label="Real-app clip for this moment"></video></div>
         </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-prompt.mp4" poster="media/clip-prompt.jpg" autoplay muted loop playsinline aria-label="A prompt building a wishlist feature"></video></div>
-      </div>
-
-      <div class="feature" style="--c:var(--red)">
-        <div class="copy">
-          <span class="tag">Test view</span>
-          <h3>Tests you can see.</h3>
-          <p>Press play and a shopper walks your tests one by one. It stops at the one that fails and says what broke, where, and what to do next.</p>
-          <ul><li>Finds your project's own test, lint, type and build commands</li><li>Every test case becomes a step on the route</li><li>Failures name the file and the next step</li></ul>
-        </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-tests.mp4" poster="media/clip-tests.jpg" autoplay muted loop playsinline aria-label="A test run stopping at a failing test"></video></div>
-      </div>
-
-      <div class="feature flip" style="--c:var(--yellow)">
-        <div class="copy">
-          <span class="tag">Project analysis</span>
-          <h3>It reads your project first.</h3>
-          <p>An analysis agent works out what the project is from its README, its frontend, backend, database and outside services, and how the parts connect.</p>
-          <ul><li>Reports each step live as it reads</li><li>Groups files into features across layers</li><li>The same tools are open to any agent over a local API</li></ul>
-        </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-analysis.mp4" poster="media/clip-analysis.jpg" autoplay muted loop playsinline aria-label="The project analysis report"></video></div>
-      </div>
-
-      <div class="feature" style="--c:var(--blue)">
-        <div class="copy">
-          <span class="tag">Source control</span>
-          <h3>Ship it in one click.</h3>
-          <p>Stage, commit, and commit and push from the same window. When something fails, the message says what broke and the next step.</p>
-          <ul><li>Git badges on every changed file</li><li>Uses the git login already on your computer</li><li>No credentials stored by the app</li></ul>
-        </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-git.mp4" poster="media/clip-git.jpg" autoplay muted loop playsinline aria-label="Committing and pushing to origin/main"></video></div>
-      </div>
-
-      <div class="feature flip" style="--c:var(--cyan)">
-        <div class="copy">
-          <span class="tag">Hologram mode</span>
-          <h3>Steer your code with your hands.</h3>
-          <p>Turn on the camera and the town becomes a hologram. Move an open hand to turn it, spread two hands to zoom, make a fist to hold, and pinch twice to reset.</p>
-          <ul><li>Hand tracking runs on your computer with MediaPipe</li><li>No camera picture leaves your PC</li><li>Uses the webcam you already have</li></ul>
-        </div>
-        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-holo.mp4" poster="media/clip-holo.jpg" autoplay muted loop playsinline aria-label="The hologram town following hand gestures"></video></div>
       </div>
     </div>
   </section>
@@ -280,7 +295,7 @@
         <p>From the first run to a pushed commit, narrated, in the real app.</p>
       </div>
       <div class="film">
-        <div class="window"><video id="demo" src="media/demo.mp4" poster="media/poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville narrated demo, 2 minutes 14 seconds"></video></div>
+        <div class="window"><video id="demo" src="media/demo.mp4" poster="media/poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville narrated demo, 2 minutes 14 seconds"><track kind="captions" src="media/demo.vtt" srclang="en" label="English"></video></div>
         <div class="chapters" id="chapters" role="list" aria-label="Demo chapters"></div>
       </div>
       <p class="honest">Recorded in the real app on a sample project. The agent's steps and the hand input are scripted for the recording, and the video says so on screen.</p>
@@ -311,7 +326,7 @@
         <p>Use them in posts, talks and write-ups.</p>
       </div>
       <div class="kit">
-        <figure><video src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="none"></video><figcaption><b>Launch film</b><span>0:30 · 1080p</span></figcaption></figure>
+        <figure><video src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="none"></video><figcaption><b>Launch film</b><span>0:58 · narrated</span></figcaption></figure>
         <figure><video src="media/social.mp4" poster="media/poster-social.jpg" controls playsinline preload="none"></video><figcaption><b>Social cut</b><span>0:15 · 1080p</span></figcaption></figure>
         <figure><video src="media/demo.mp4" poster="media/poster-demo.jpg" controls playsinline preload="none"></video><figcaption><b>Narrated demo</b><span>2:14 · 1080p</span></figcaption></figure>
       </div>
@@ -373,7 +388,81 @@
     CHAPTERS.forEach(([t], i) => { if (demo.currentTime >= t) cur = i; });
     [...list.children].forEach((b, i) => b.setAttribute('aria-current', String(i === cur)));
   });
-  // Feature loops play only while on screen, to save battery.
+
+  // Launch film: chapter rail with progress, and a transcript that follows the voice (click a line to jump there).
+  const FILM = { chapters: [[0.0, "Hook"], [7.19, "Why"], [14.28, "What"], [24.49, "Open"], [30.29, "Prompt"], [36.91, "Test"], [42.97, "Ship"], [46.77, "Hologram"], [51.53, "Download"]], captions: [[0.35, 2.25, "You asked your AI for a feature."], [2.25, 4.62, "It wrote twelve files in thirty seconds."], [4.92, 6.64, "Do you know what it actually built?"], [7.54, 8.85, "Vibe coding is fast."], [8.85, 10.49, "Reading every diff isn't."], [10.79, 13.73, "And when something breaks, you're lost in code you didn't write."], [14.63, 18.17, "Meet Codeville, a desktop workspace built for vibe coders."], [18.47, 21.23, "It turns your project into a town you can see:"], [21.23, 23.94, "every feature a district, every file a block."], [24.84, 29.74, "Open any project, and it shows you the stack, the features, and how everything connects."], [30.64, 34.48, "Prompt Claude Code, and watch every file land in the town, live."], [34.78, 36.36, "You always know what changed."], [37.26, 42.42, "When tests fail, a shopper walks your tests and stops at the one that broke, with the fix to make."], [43.32, 43.65, "Ready?"], [43.65, 45.31, "Commit and push, in one click."], [47.12, 50.98, "And when you want to show it off, steer your code as a hologram, with your hands."], [51.88, 52.46, "Codeville."], [52.46, 53.85, "See what your AI builds."], [54.15, 55.56, "Download it for Windows."]], total: 57.53 };
+  const film = document.getElementById('hero-film'), rail = document.getElementById('film-rail'), tr = document.getElementById('film-transcript');
+  FILM.chapters.forEach(([t, name], i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'film-ch-' + i; b.setAttribute('role', 'listitem'); b.textContent = name;
+    b.appendChild(document.createElement('span'));
+    b.addEventListener('click', () => { film.currentTime = t + 0.01; film.play().catch(() => {}); });
+    rail.appendChild(b);
+  });
+  FILM.captions.forEach(([a, , text], i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'film-line-' + i; b.textContent = text;
+    b.addEventListener('click', () => { film.currentTime = a; film.play().catch(() => {}); });
+    tr.appendChild(b);
+  });
+  function syncFilm() {
+    const t = film.currentTime;
+    FILM.chapters.forEach(([a], i) => {
+      const b = FILM.chapters[i + 1] ? FILM.chapters[i + 1][0] : FILM.total, btn = rail.children[i];
+      btn.setAttribute('aria-current', String(t >= a && t < b));
+      btn.querySelector('span').style.width = `${Math.max(0, Math.min(1, (t - a) / (b - a))) * 100}%`;
+    });
+    FILM.captions.forEach(([a, b], i) => {
+      const el = tr.children[i], now = t >= a && t < b + 0.2;
+      if (now && !el.classList.contains('now')) tr.scrollTop = el.offsetTop - tr.offsetTop - 50;
+      el.classList.toggle('now', now);
+    });
+  }
+  film.addEventListener('timeupdate', syncFilm);
+  syncFilm();
+
+  // When do I use it?
+  const UC = {
+    open: { tag: 'Project analysis and block town', title: 'Know a project in seconds.', clip: 'analysis', c: 'var(--yellow)',
+      what: 'An analysis agent reads the README, package files and code, works out the stack, sorts files into features, and draws the project as a town.',
+      why: 'You see what a project is and how its parts connect before reading a line, even code your agent wrote while you were away.',
+      how: 'Open a folder from the welcome screen, or start one from a template.' },
+    prompt: { tag: 'Chat with Claude Code', title: 'Watch every file land, live.', clip: 'prompt', c: 'var(--green)',
+      what: 'Send a prompt from the chat. Claude Code runs in your project, and each edit, tool call and sub-agent appears as it happens while new blocks light up in the town.',
+      why: 'You always know what the agent changed and where, without scrolling through diffs.',
+      how: 'Type what to build in the chat box and press Enter.' },
+    test: { tag: 'Test view', title: 'See exactly what broke.', clip: 'tests', c: 'var(--red)',
+      what: 'Press play: a shopper walks your test cases one by one and stops at the first failure, with the error, the file and the next step.',
+      why: 'Failures read like a story you can follow, so you know what to ask your agent to fix.',
+      how: 'Open the Test tab and press the play button for backend or frontend.' },
+    ship: { tag: 'Source control', title: 'Commit and push in one click.', clip: 'git', c: 'var(--blue)',
+      what: 'Changed files show git badges. Stage them all, write a message, then Commit and push. If a push fails, the message says why and what to do.',
+      why: 'Shipping stays in the same window, using the git login already on your computer.',
+      how: 'Use the Source control panel on the right.' },
+    holo: { tag: 'Hologram mode', title: 'Steer your code with your hands.', clip: 'holo', c: 'var(--cyan)',
+      what: 'Turn on the camera and the town becomes a see-through hologram. Move an open hand to turn it, spread two hands to zoom, make a fist to hold, pinch twice to reset.',
+      why: 'Walk a teammate or a room through a project without touching the mouse. Hand tracking runs on your computer; no camera picture leaves it.',
+      how: 'Click the hand button in the corner of the town.' },
+  };
+  const tabs = document.querySelectorAll('.tabs [role="tab"]'), panel = document.getElementById('uc-panel'), ucv = document.getElementById('uc-video');
+  function showUC(key, focus) {
+    const u = UC[key];
+    tabs.forEach((t) => { const on = t.dataset.uc === key; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+    panel.setAttribute('aria-labelledby', 'tab-' + key); panel.style.setProperty('--c', u.c);
+    document.getElementById('uc-tag').textContent = u.tag; document.getElementById('uc-title').textContent = u.title;
+    document.getElementById('uc-what').textContent = u.what; document.getElementById('uc-why').textContent = u.why; document.getElementById('uc-how').textContent = u.how;
+    ucv.src = `media/clip-${u.clip}.mp4`; ucv.poster = `media/clip-${u.clip}.jpg`; ucv.play().catch(() => {});
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => showUC(t.dataset.uc));
+    t.addEventListener('keydown', (e) => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { e.preventDefault(); showUC(tabs[(i + d + tabs.length) % tabs.length].dataset.uc, true); }
+    });
+  });
+  showUC('open');
+
+  // Loops play only while on screen, to save battery.
   const loops = document.querySelectorAll('video[autoplay]');
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause())), { threshold: 0.2 });

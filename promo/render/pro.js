@@ -14,8 +14,9 @@
   // ---------- real-app frames ----------
   const SHOT_DIR = new URLSearchParams(location.search).get('shots') || '';
   const cache = new Map();
+  const shotInfo = (id) => CV.PRO.shots[id] || (CV.FILM && CV.FILM.shots[id]);
   function shotFrame(id, tl) {
-    const s = CV.PRO.shots[id], n = Math.max(1, Math.round(s.len * 30));
+    const s = shotInfo(id), n = Math.max(1, Math.round(s.len * 30));
     return `${SHOT_DIR}/${id}/${String(clamp(Math.floor(tl * 30), 0, n - 1) + 1).padStart(5, '0')}.jpg`;
   }
   function load(src) {
@@ -34,7 +35,7 @@
     const im = ready.get(id);
     ctx.fillStyle = '#0d1124'; ctx.fillRect(x, y, w, h);
     if (!im) return;
-    const k = ease_(clamp(tl / CV.PRO.shots[id].len));
+    const k = ease_(clamp(tl / shotInfo(id).len));
     const cw = lerp(crop0[2], crop1[2], k), ch = cw * h / w;
     ctx.drawImage(im, lerp(crop0[0], crop1[0], k), lerp(crop0[1], crop1[1], k), cw, ch, x, y, w, h);
   }
@@ -244,6 +245,7 @@
         reveal(ctx, [[['Steer', '#fff'], ['it', '#fff'], ['with', '#fff'], ['your', '#fff'], ['hands.', PAL.cyan]]], t, 9.25, W / 2, 112, { size: 78, align: 'center', out: 11.2 });
       } else endCard(ctx, t, 11.52);
       for (const w of [1.26, 3.4, 6.4, 8.77, 11.17]) wipe(ctx, t, w);
+      if (CV.drawCaptions && CV.SOCIAL_CAPTIONS) CV.drawCaptions(ctx, t, CV.SOCIAL_CAPTIONS);
     },
   };
 
@@ -289,4 +291,6 @@
   CV.scenes['pro-social'] = { duration: S.duration, render: S.render, prepare: (t) => prepareShots(S.shotsAt(t)) };
   CV.scenes['pro-demo'] = { get duration() { return D.duration; }, render: D.render };
   CV.PRO_SCREEN = SCREEN;
+  // Shared with film.js.
+  CV.P = { INK, MUTED, G, DISPLAY, BODY, BODY_M, f, reveal, label, pill, bg, cubes, laptop, wipe, mark, lockup, drawShot, prepareShots };
 })();

@@ -1,0 +1,2 @@
+// Written from site/media/social.vtt: the social cut's burned-in captions.
+CV.SOCIAL_CAPTIONS = [{"start": 0.15, "end": 1.15, "text": "You vibe code."}, {"start": 1.8, "end": 2.78, "text": "Meet Codeville."}, {"start": 3.85, "end": 5.47, "text": "Prompt it, and watch it build."}, {"start": 6.85, "end": 8.26, "text": "See exactly what broke."}, {"start": 9.25, "end": 10.51, "text": "Steer it with your hands."}, {"start": 11.75, "end": 12.31, "text": "Codeville."}, {"start": 12.31, "end": 13.65, "text": "Download it for Windows."}];
