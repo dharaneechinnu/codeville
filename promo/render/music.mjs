@@ -92,7 +92,7 @@ function save(T, name, fadeOut = 1.2) {
 {
   const T = track(30);
   music(T, 128, (t) => {
-    if (t < 3) return { arp: 0.07, hat: 0.04 };
+    if (t < 2.7) return { arp: 0.07, hat: 0.04, kick: 0.35 };
     if (t < 6) return { arp: 0.09, bass: 0.22, hat: 0.06, kick: t > 4.5 ? 0.45 : 0 };
     if (t < 22) return { arp: 0.09, bass: 0.25, hat: 0.07, kick: 0.55, snare: 0.22, lead: t > 8.9 ? 0.07 : 0 };
     if (t < 26) return { pad: 0.12, arp: 0.06, hat: 0.05 };
@@ -102,13 +102,16 @@ function save(T, name, fadeOut = 1.2) {
   for (let i = 0; i < 18; i++) inst.pop(T, 6.3 + i * 0.18 + rnd() * 0.05, 0.12, 520 + rnd() * 400);
   for (const [s, n] of [[13.9, 7], [14.6, 6], [15.7, 3]]) for (let k = 0; k < n; k++) inst.pop(T, s + k * 0.11 + 0.15, 0.13, 700 + k * 40);
   inst.hit(T, 8.9, 0.5); inst.click(T, 13.45); inst.ding(T, 16.35);
-  inst.fail(T, 17.35 + 10 / 4.1); inst.hit(T, 26.0, 0.6); inst.ding(T, 27.3, 0.14);
+  inst.fail(T, 17.9 + 10 / 5); inst.hit(T, 26.0, 0.6); inst.ding(T, 27.3, 0.14);
   save(T, 'launch');
 }
 
-// ---------- demo: 90 s at 100 bpm, quieter bed under the walkthrough ----------
+// ---------- demo: 3.5 s title + 90 s at 100 bpm, quieter bed under the walkthrough ----------
 {
-  const T = track(90);
+  const OFF = 3.5, T0 = track(90 + OFF), T = { ...T0, add: (t, ...a) => T0.add(t + OFF, ...a), dur: 90 };
+  music({ ...T0, dur: OFF }, 100, () => ({ arp: 0.08, hat: 0.05, kick: 0.4 }));
+  inst.pop(T0, 0.15, 0.15, 520); inst.pop(T0, 0.4, 0.15, 780); inst.whoosh(T0, OFF - 0.45, 0.25);
+  for (let i = 0; i < 25; i++) inst.click(T0, 0.95 + i / 26, 0.08);
   music(T, 100, (t) => {
     if (t >= 86) return { arp: 0.08, bass: 0.22, hat: 0.06, kick: 0.45, snare: 0.18, lead: 0.07 };
     if (t >= 80) return { pad: 0.1, arp: 0.05, hat: 0.04 };
@@ -121,5 +124,5 @@ function save(T, name, fadeOut = 1.2) {
   for (let i = 0; i < 20; i++) inst.pop(T, 25.3 + i * 0.11, 0.08, 500 + rnd() * 400);
   for (const [s, n] of [[45.8, 5], [46.9, 4], [49.1, 2]]) for (let k = 0; k < n; k++) inst.pop(T, s + k * 0.13 + 0.15, 0.1, 700 + k * 40);
   inst.ding(T, 51.2, 0.1); inst.fail(T, 56.9 + 12 / 1.95, 0.16); inst.ding(T, 77.5, 0.12); inst.hit(T, 86.0, 0.45);
-  save(T, 'demo', 2);
+  save(T0, 'demo', 2);
 }

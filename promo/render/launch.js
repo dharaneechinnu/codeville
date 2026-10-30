@@ -50,7 +50,8 @@
     [['    for', KW], [' item', PL], [' in', KW], [' cart.items.all():', PL]],
     [['// 1,284 files changed', CM]],
   ];
-  function codeWall(ctx, t) {
+  function codeWall(ctx, g) {
+    const t = g - 2.7 + 1.6; // local time: already scrolling fast when the title card hands over
     ctx.fillStyle = '#0B1020'; ctx.fillRect(0, 0, W, H);
     const lh = 50, tt = Math.min(t, 3.2), scroll = 30 * tt + 240 * tt * tt;
     const first = Math.floor(scroll / lh) - 1;
@@ -78,11 +79,10 @@
         x += w;
       });
     }
-    if (t < 0.9 && Math.floor(t * 4) % 2 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(170, 66, 16, 32); }
-    const band = Math.max(CV.win(t, 0.15, 2.95, 0.25, 0.25), CV.win(t, 3.0, 5.6, 0.25, 0.3));
-    ctx.fillStyle = `rgba(11,16,32,${0.78 * band})`; ctx.fillRect(0, 420, W, 230);
-    headline(ctx, [['Your', '#fff'], ['AI', PAL.cyan], ['writes', '#fff'], ['the', '#fff'], ['code...', PAL.yellow]], t, 0.25, W / 2, 540, { size: 104, out: 2.75 });
-    headline(ctx, [['...but', '#fff'], ['what', '#fff'], ['did', '#fff'], ['it', '#fff'], ['actually', PAL.red], ['build?', PAL.yellow]], t, 3.05, W / 2, 540, { size: 96, out: 5.4 });
+    const band = Math.max(CV.win(g, 2.75, 4.35, 0.2, 0.2), CV.win(g, 4.4, 5.65, 0.2, 0.3));
+    ctx.fillStyle = `rgba(11,16,32,${0.8 * band})`; ctx.fillRect(0, 420, W, 230);
+    headline(ctx, [['Your', '#fff'], ['prompt', PAL.cyan], ['writes', '#fff'], ['1,284', PAL.yellow], ['lines...', '#fff']], g, 2.8, W / 2, 540, { size: 100, out: 4.15, stagger: 0.07 });
+    headline(ctx, [['...now', '#fff'], ['SEE', PAL.red], ['what', '#fff'], ['it', '#fff'], ['built.', PAL.yellow]], g, 4.45, W / 2, 540, { size: 104, out: 5.45, stagger: 0.07 });
   }
 
   // ---------- 6-12: the town rains down, "Meet Codeville" ----------
@@ -91,7 +91,7 @@
     const e = ease.inOut(prog(t, 6, 12));
     const v = view({ scale: lerp(36, 50, e), cx: W / 2, cy: lerp(700, 690, e), yaw: lerp(0.45, 0.85, e), fx: 8, fy: 5 });
     drawTown(ctx, v, town, t, { ground: GROUND, labelAlpha: () => prog(t, 9.6, 10.0), linkAlpha: () => prog(t, 10, 10.6) });
-    headline(ctx, [['Every', '#fff'], ['feature', '#fff'], ['becomes', '#fff'], ['a', '#fff'], ['building.', PAL.yellow]], t, 6.35, W / 2, 150, { size: 80, out: 8.45 });
+    headline(ctx, [['Your', '#fff'], ['prompts,', '#fff'], ['made', '#fff'], ['visual.', PAL.yellow]], t, 6.35, W / 2, 150, { size: 92, out: 8.45 });
     headline(ctx, [['Meet', '#fff']], t, 8.7, W / 2, 110, { size: 60 });
     if (t > 8.9) logo(ctx, W / 2, 210, 88, t, 8.9);
   }
@@ -115,13 +115,13 @@
       text(ctx, '+1', sx, sy, { size: 18, fam: 'pixel', col: '#fff', align: 'center', shadow: '#05060d', sd: 3, alpha: 1 - a });
     }
     CV.chat(ctx, 90, 250, 640, 700, t, CHAT);
-    headline(ctx, [['Watch', '#fff'], ['every', '#fff'], ['file', '#fff'], ['appear.', '#fff'], ['Live.', PAL.red]], t, 12.15, W / 2, 130, { size: 84 });
+    headline(ctx, [['Prompt', PAL.cyan], ['it.', '#fff'], ['Watch', '#fff'], ['it', '#fff'], ['build.', '#fff'], ['Live.', PAL.red]], t, 12.15, W / 2, 130, { size: 84 });
   }
 
   // ---------- 17-22: the shopper runs the tests ----------
   const TILES = route([[0, 0], [9, 0], [9, 5]]);
   const STEPS = [[0, 'Home'], [3, 'Login'], [6, 'Add item'], [10, 'Cart'], [14, 'Pay']];
-  const FAIL = 10, WALK0 = 17.35, SPEED = 4.1, FAIL_T = WALK0 + FAIL / SPEED;
+  const FAIL = 10, WALK0 = 17.9, SPEED = 5, FAIL_T = WALK0 + FAIL / SPEED;
   const DECOR = [];
   [[1, -3, PAL.blue, 3], [2, -3, PAL.blue, 2], [4, -3, PAL.green, 4], [5, -3, PAL.green, 3], [7, -3, PAL.yellow, 2], [10, -3, PAL.purple, 3],
     [11, -3, PAL.purple, 2], [6, 3, PAL.blue, 1], [6, 4, PAL.blue, 2], [12, 1, PAL.green, 1]].forEach(([x, y, col, h], i) => {
@@ -137,6 +137,7 @@
       title: 'TEST FAILED',
       lines: [['cart total is wrong', '#fff'], ['expected 59.98, got 29.99', '#FF9AA6', 'mono'], ['Next: fix api/cart.py:42', '#8dffa8', 'mono']],
     });
+    CV.promptPill(ctx, 60, 230, 640, 'test the checkout', t, 17.05, { sendAt: 17.85, cps: 30 });
     headline(ctx, [['Tests', '#fff'], ['you', '#fff'], ['can', '#fff'], ['see.', PAL.green]], t, 17.15, W / 2, 130, { size: 96 });
   }
 
@@ -154,12 +155,14 @@
   }
 
   function render(ctx, t) {
-    if (t < 6.0) codeWall(ctx, t);
+    if (t < 2.7) CV.titleCard(ctx, t, 0);
+    else if (t < 6.0) codeWall(ctx, t);
     else if (t < 12.0) meet(ctx, t);
     else if (t < 17.0) live(ctx, t);
     else if (t < 22.0) tests(ctx, t);
     else if (t < 26.0) holo(ctx, t);
     else endCard(ctx, t, 26.0, town);
+    wipe(ctx, t, 2.25, 0.9);
     wipe(ctx, t, 5.55, 0.9);
     wipe(ctx, t, 11.55, 0.9);
     wipe(ctx, t, 16.55, 0.9);

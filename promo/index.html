@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Codeville - Vibe code. See it build.</title>
+<title>Codeville - Built for vibe coders</title>
 <meta name="description" content="Codeville is a desktop workspace for vibe coding. See what your coding agent builds as a block town, watch a shopper run your tests, and control it all with your hands.">
 <style>
   @font-face { font-family: "Press Start 2P"; src: url(render/fonts/PressStart2P.ttf); font-display: swap; }
@@ -37,6 +37,7 @@
   header.hero { background: linear-gradient(#6EC1FF, #D6F0FF); color: var(--ink); padding: 72px 0 0; overflow: hidden; position: relative; }
   .cloud { position: absolute; height: 26px; background: rgba(255,255,255,0.85); box-shadow: 52px 26px 0 rgba(255,255,255,0.85); animation: drift linear infinite; }
   @keyframes drift { from { transform: translateX(-300px); } to { transform: translateX(110vw); } }
+  .eyebrow { text-align: center; margin: 0 0 22px; font-size: clamp(12px, 2vw, 18px); color: #fff; text-shadow: 3px 3px 0 #05060d; }
   .hero h1 { margin: 0; font-size: clamp(30px, 6.4vw, 72px); line-height: 1.15; text-align: center; }
   .hero h1 span { display: inline-block; text-shadow: 0.08em 0.08em 0 rgba(5,6,13,0.85); }
   .tag { text-align: center; font-size: clamp(26px, 4vw, 48px); margin: 18px 0 10px; }
@@ -83,9 +84,10 @@
   <div class="cloud" style="width:120px;top:180px;animation-duration:95s;animation-delay:-40s"></div>
   <div class="cloud" style="width:220px;top:300px;animation-duration:120s;animation-delay:-80s"></div>
   <div class="wrap" style="position:relative">
+    <p class="eyebrow pixel">Built for vibe coders</p>
     <h1 class="pixel"><span style="color:var(--blue)">C</span><span style="color:var(--red)">O</span><span style="color:var(--yellow)">D</span><span style="color:var(--green)">E</span><span style="color:var(--blue)">V</span><span style="color:var(--red)">I</span><span style="color:var(--yellow)">L</span><span style="color:var(--green)">L</span><span style="color:var(--blue)">E</span></h1>
     <p class="tag"><b>Vibe</b> <b>code.</b> <b>See</b> <b>it</b> build.</p>
-    <p class="lede">A desktop workspace for vibe coding. Your coding agent's work becomes a block town: one building per feature, one block per file, built live while Claude Code writes.</p>
+    <p class="lede"><strong>Your prompts, made visual.</strong> Type a prompt and watch Claude Code's work become a block town: one building per feature, one block per file, built live as it writes.</p>
     <div class="ctas">
       <a class="btn" href="https://github.com/dharaneechinnu/codeville/releases">&#11015; Download for Windows</a>
       <a class="btn alt" href="#demo">&#9654; Watch the demo</a>
@@ -117,7 +119,7 @@
     <h2>90-second demo</h2>
     <p class="sub">From first run to a pushed commit: analysis, the block town, a live chat build, a failing test, and hand control.</p>
     <div class="video">
-      <video src="demo.mp4" poster="poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville demo video, 90 seconds"></video>
+      <video src="demo.mp4" poster="poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville demo video, 93 seconds"></video>
     </div>
   </div>
 </section>

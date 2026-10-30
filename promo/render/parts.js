@@ -164,5 +164,40 @@
     }
   }
 
-  Object.assign(CV, { chat, problemCard, route, shopperAt, testWorld, holoBg, endCard });
+  // Opening title: "Built for vibe coders." and a prompt bar that types the promise.
+  function titleCard(ctx, t, t0, line = 'your prompts, made visual') {
+    CV.darkBg(ctx, t);
+    for (let k = 0; k < 28; k++) {
+      const s = 18 + hash(k) * 34, x = hash(k + 1) * W, y = H + 60 - (((t - t0) * 140 * (0.5 + hash(k + 2)) + hash(k + 3) * (H + 120)) % (H + 120));
+      ctx.fillStyle = shade(RAINBOW[k % 4], 1, 0.28); ctx.fillRect(x, y, s, s);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x, y, s, s * 0.2);
+    }
+    headline(ctx, [['Built', '#fff'], ['for', '#fff']], t, t0 + 0.1, W / 2, 360, { size: 104 });
+    headline(ctx, [['vibe', PAL.cyan], ['coders.', PAL.yellow]], t, t0 + 0.35, W / 2, 540, { size: 168 });
+    const a = prog(t, t0 + 0.8, t0 + 1.1);
+    if (a <= 0) return;
+    const bw = 980, bx = W / 2 - bw / 2, by = 680, s = ease.outBack(a);
+    ctx.save(); ctx.translate(W / 2, by + 50); ctx.scale(s, s); ctx.translate(-W / 2, -(by + 50));
+    panel(ctx, bx, by, bw, 100, { fill: '#0B1020' });
+    text(ctx, '>', bx + 36, by + 64, { size: 30, fam: 'pixel', col: PAL.green });
+    const str = typed(line, t, t0 + 0.95, 26), w = text(ctx, str, bx + 90, by + 64, { size: 40, col: '#fff' });
+    if (Math.floor(t * 3) % 2 === 0) { ctx.fillStyle = PAL.cyan; ctx.fillRect(bx + 96 + w, by + 28, 6, 46); }
+    ctx.restore();
+  }
+
+  // A small prompt bar used to show that every scene starts from a prompt.
+  function promptPill(ctx, x, y, w, s, t, t0, o = {}) {
+    if (t < t0) return;
+    const a = ease.outBack(prog(t, t0, t0 + 0.3));
+    ctx.save(); ctx.translate(x, y); ctx.scale(a, a);
+    panel(ctx, 0, 0, w, 72, { fill: '#0B1020' });
+    text(ctx, 'PROMPT', 24, 44, { size: 14, fam: 'pixel', col: PAL.green });
+    const str = typed(s, t, t0 + 0.2, o.cps || 24), tw = text(ctx, str, 140, 47, { size: 28, col: '#fff' });
+    const sent = o.sendAt != null && t >= o.sendAt;
+    if (!sent && Math.floor(t * 3) % 2 === 0) { ctx.fillStyle = PAL.cyan; ctx.fillRect(144 + tw, 20, 4, 34); }
+    if (sent) { const k = prog(t, o.sendAt, o.sendAt + 0.25); ctx.fillStyle = shade(PAL.green, 1, 1 - k * 0.6); ctx.fillRect(w - 64, 18, 40, 36); check(ctx, w - 58, 26, 3, '#fff'); }
+    ctx.restore();
+  }
+
+  Object.assign(CV, { titleCard, promptPill, chat, problemCard, route, shopperAt, testWorld, holoBg, endCard });
 })();

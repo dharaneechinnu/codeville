@@ -388,16 +388,23 @@
 
   // ---------- timeline ----------
   const SCENES = [
-    [0, 10, '01', 'FIRST RUN', 'Checks Git, Claude Code and Node.js, then opens your project', null, welcome],
-    [10, 25, '02', 'PROJECT ANALYSIS', 'An agent reads your project: stack, layers, features and links', 'FILES', analysis],
-    [25, 40, '03', 'BLOCK TOWN', 'One building per feature layer, one block per file. Click to open.', 'TOWN', townScene],
-    [40, 55, '04', 'CHAT WITH CLAUDE CODE', 'Send a prompt. Every edit lands in the town, live.', 'CHAT', chatScene],
-    [55, 70, '05', 'TEST VIEW', 'A shopper walks your tests and stops where it breaks', 'TOWN', testScene],
-    [70, 80, '06', 'SOURCE CONTROL', 'Stage, commit and push. Failures say what to do next.', 'GIT', gitScene],
+    [0, 10, '01', 'FIRST RUN', 'Connect Claude Code once. After that, you just prompt.', null, welcome],
+    [10, 25, '02', 'PROJECT ANALYSIS', 'Open any vibe-coded project and see what is really inside', 'FILES', analysis],
+    [25, 40, '03', 'BLOCK TOWN', 'Your prompts, made visual: one building per feature, one block per file', 'TOWN', townScene],
+    [40, 55, '04', 'PROMPT IT, WATCH IT BUILD', 'Type a prompt. Every file the agent writes drops into the town, live.', 'CHAT', chatScene],
+    [55, 70, '05', 'TEST VIEW', 'A shopper walks your tests, stops where it breaks, and you prompt the fix', 'TOWN', testScene],
+    [70, 80, '06', 'SOURCE CONTROL', 'Ship what you prompted: stage, commit and push in one click', 'GIT', gitScene],
     [80, 86, '07', 'HAND CONTROL', 'Turn on the camera. Rotate and zoom the hologram town by hand.', 'TOWN', handScene],
   ];
 
-  function render(ctx, t) {
+  const INTRO = 3.5;
+  function render(ctx, g) {
+    if (g < INTRO) { CV.titleCard(ctx, g, 0); wipe(ctx, g, INTRO - 0.45, 0.9); return; }
+    const t = g - INTRO;
+    if (t < 0.45) { renderWalk(ctx, t); wipe(ctx, g, INTRO - 0.45, 0.9); return; }
+    renderWalk(ctx, t);
+  }
+  function renderWalk(ctx, t) {
     if (t >= 86) { endCard(ctx, t, 86, town); wipe(ctx, t, 85.55, 0.9); return; }
     darkBg(ctx, t);
     const i = SCENES.findIndex(([a, b]) => t >= a && t < b), [t0, t1, num, title, sub, nav, draw] = SCENES[i];
@@ -418,5 +425,5 @@
   }
 
   CV.scenes = CV.scenes || {};
-  CV.scenes.demo = { duration: 90, render };
+  CV.scenes.demo = { duration: 90 + INTRO, render };
 })();
