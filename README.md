@@ -1,5 +1,10 @@
 # Codeville (Windows app)
 
+[![Codeville launch video](promo/preview.gif)](promo/launch.mp4)
+
+**Vibe code. See it build.** Watch the [30-second launch video](promo/launch.mp4) or the [90-second demo](promo/demo.mp4),
+or open the [launch page](promo/index.html). [Download for Windows](https://github.com/dharaneechinnu/codeville/releases).
+
 A desktop workspace for vibe coding. It shows what your coding agent builds: a block town (one building per feature, one
 block per file), a walking shopper that runs your tests, and short messages that say what broke and what to do next.
 
@@ -136,6 +141,22 @@ Landmarker (Apache 2.0). The runtime and the model are bundled and run on this c
 `npm run prepare:gestures` copies the runtime and downloads the model (about 8 MB) once; `dev:ui` and `build:ui` run it.
 `npm run test:gestures` checks the gesture rules with made-up hand points. If the camera is blocked, turn it on in Windows
 Settings, Privacy and security, Camera, for desktop apps. The window is now served from `app://codeville` instead of a file.
+
+## Promo videos
+
+`promo/` holds the launch video (30 s), the demo (90 s), the launch page and the code that makes them. Everything is
+drawn on a canvas in `promo/render` (voxel town, pixel UI, kinetic text) and the soundtrack is synthesized, so there
+are no outside assets apart from three Google Fonts (OFL) in `promo/render/fonts`. To change and re-render:
+
+```
+cd promo/render
+node music.mjs                 # audio/launch.wav, audio/demo.wav
+node render.mjs launch         # ../launch.mp4 (Playwright Chromium + ffmpeg)
+node render.mjs demo
+node render.mjs demo --still 31.5   # one frame, to check a change
+```
+
+Open `promo/render/frame.html?scene=launch` (or `demo`) in a browser to preview in real time; add `&t=20` to start at 20 s.
 
 ## Not done yet
 

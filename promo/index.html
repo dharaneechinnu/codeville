@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codeville - Vibe code. See it build.</title>
+<meta name="description" content="Codeville is a desktop workspace for vibe coding. See what your coding agent builds as a block town, watch a shopper run your tests, and control it all with your hands.">
+<style>
+  @font-face { font-family: "Press Start 2P"; src: url(render/fonts/PressStart2P.ttf); font-display: swap; }
+  @font-face { font-family: "Silkscreen"; font-weight: 700; src: url(render/fonts/Silkscreen-Bold.ttf); font-display: swap; }
+  @font-face { font-family: "Space Grotesk"; font-weight: 700; src: url(render/fonts/SpaceGrotesk-Bold.ttf); font-display: swap; }
+  :root {
+    --blue: #4285F4; --red: #EA4335; --yellow: #FBBC05; --green: #34A853; --cyan: #5CF2FF; --purple: #9B6BFF;
+    --ink: #0B1020; --night: #06101A; --panel: #151A33; --line: #39427A; --muted: #AEB6E8; --sky: #6EC1FF;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--night); color: #fff; font: 700 18px/1.55 "Space Grotesk", system-ui, sans-serif; }
+  a { color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  .pixel { font-family: "Press Start 2P", monospace; font-weight: 400; letter-spacing: 0.02em; }
+
+  nav { position: sticky; top: 0; z-index: 10; background: rgba(6,16,26,0.88); backdrop-filter: blur(6px); border-bottom: 4px solid #05060d; }
+  nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 14px; }
+  .brand i { width: 18px; height: 18px; background: var(--green); box-shadow: 6px -6px 0 -2px var(--red), -2px 6px 0 -2px var(--yellow); }
+  nav .links { margin-left: auto; display: flex; gap: 20px; font-size: 16px; }
+  nav .links a { text-decoration: none; color: var(--muted); }
+  nav .links a:hover { color: #fff; }
+
+  .btn { display: inline-flex; align-items: center; gap: 12px; padding: 18px 26px; font: 400 14px "Press Start 2P", monospace; color: #fff; text-decoration: none;
+    background: var(--green); border: 4px solid #05060d; box-shadow: inset 0 5px 0 rgba(255,255,255,0.25), 0 6px 0 #1d5e2e; transition: transform .1s, box-shadow .1s; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(4px); box-shadow: inset 0 5px 0 rgba(255,255,255,0.25), 0 2px 0 #1d5e2e; }
+  .btn.alt { background: var(--blue); box-shadow: inset 0 5px 0 rgba(255,255,255,0.25), 0 6px 0 #234a8a; }
+
+  header.hero { background: linear-gradient(#6EC1FF, #D6F0FF); color: var(--ink); padding: 72px 0 0; overflow: hidden; position: relative; }
+  .cloud { position: absolute; height: 26px; background: rgba(255,255,255,0.85); box-shadow: 52px 26px 0 rgba(255,255,255,0.85); animation: drift linear infinite; }
+  @keyframes drift { from { transform: translateX(-300px); } to { transform: translateX(110vw); } }
+  .hero h1 { margin: 0; font-size: clamp(30px, 6.4vw, 72px); line-height: 1.15; text-align: center; }
+  .hero h1 span { display: inline-block; text-shadow: 0.08em 0.08em 0 rgba(5,6,13,0.85); }
+  .tag { text-align: center; font-size: clamp(26px, 4vw, 48px); margin: 18px 0 10px; }
+  .tag b:nth-child(1) { color: var(--blue); } .tag b:nth-child(2) { color: var(--red); } .tag b:nth-child(3) { color: #d99a00; } .tag b:nth-child(4) { color: var(--green); }
+  .lede { text-align: center; max-width: 720px; margin: 0 auto 28px; font-size: 20px; color: #263056; }
+  .ctas { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
+  .video { position: relative; border: 6px solid #05060d; background: #05060d; box-shadow: 0 14px 0 rgba(5,6,13,0.35); }
+  .video video { display: block; width: 100%; height: auto; }
+  .grass { height: 34px; margin-top: -2px; background: repeating-linear-gradient(90deg, #5DBB3F 0 24px, #4FA834 24px 48px); border-top: 6px solid #05060d; box-shadow: inset 0 -14px 0 #8B5A2B; }
+
+  section { padding: 88px 0; }
+  h2 { font: 400 clamp(18px, 3vw, 28px)/1.4 "Press Start 2P", monospace; margin: 0 0 14px; }
+  .sub { color: var(--muted); margin: 0 0 40px; max-width: 760px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .card { background: var(--panel); border: 4px solid #05060d; box-shadow: inset 4px 4px 0 rgba(255,255,255,0.08), inset -4px -4px 0 rgba(0,0,0,0.3), 0 8px 0 rgba(0,0,0,0.35); padding: 24px; }
+  .card .ico { width: 44px; height: 44px; margin-bottom: 16px; border: 4px solid #05060d; box-shadow: inset 0 -8px 0 rgba(0,0,0,0.3), inset 0 5px 0 rgba(255,255,255,0.25); }
+  .card h3 { font: 400 14px/1.5 "Press Start 2P", monospace; margin: 0 0 10px; }
+  .card p { margin: 0; color: #C9CEF0; font-size: 17px; }
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .steps li { list-style: none; counter-increment: s; position: relative; padding: 24px 24px 24px 84px; background: var(--panel); border: 4px solid #05060d; }
+  .steps li::before { content: counter(s); position: absolute; left: 20px; top: 22px; width: 44px; height: 44px; display: grid; place-items: center;
+    font: 400 16px "Press Start 2P", monospace; background: var(--blue); border: 4px solid #05060d; }
+  .steps li:nth-child(2)::before { background: var(--red); } .steps li:nth-child(3)::before { background: var(--yellow); color: var(--ink); }
+  code { font: 16px "DejaVu Sans Mono", Consolas, monospace; background: #0B1020; padding: 2px 6px; color: var(--cyan); }
+  .end { text-align: center; background: #F7F9FF; color: var(--ink); }
+  .end h2 { font-size: clamp(22px, 4vw, 40px); }
+  .end .sub { margin: 0 auto 32px; color: #3A4170; }
+  footer a { overflow-wrap: anywhere; }
+  footer { padding: 28px 16px; color: #59618F; font: 700 14px Silkscreen, monospace; text-align: center; }
+  @media (max-width: 640px) { nav .links { display: none; } .btn { padding: 14px 18px; font-size: 11px; } section { padding: 64px 0; } }
+  @media (prefers-reduced-motion: reduce) { .cloud { animation: none; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <a class="brand pixel" href="#top"><i></i>CODEVILLE</a>
+    <div class="links"><a href="#features">Features</a><a href="#demo">Demo</a><a href="#start">Get started</a></div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="cloud" style="width:180px;top:60px;animation-duration:70s"></div>
+  <div class="cloud" style="width:120px;top:180px;animation-duration:95s;animation-delay:-40s"></div>
+  <div class="cloud" style="width:220px;top:300px;animation-duration:120s;animation-delay:-80s"></div>
+  <div class="wrap" style="position:relative">
+    <h1 class="pixel"><span style="color:var(--blue)">C</span><span style="color:var(--red)">O</span><span style="color:var(--yellow)">D</span><span style="color:var(--green)">E</span><span style="color:var(--blue)">V</span><span style="color:var(--red)">I</span><span style="color:var(--yellow)">L</span><span style="color:var(--green)">L</span><span style="color:var(--blue)">E</span></h1>
+    <p class="tag"><b>Vibe</b> <b>code.</b> <b>See</b> <b>it</b> build.</p>
+    <p class="lede">A desktop workspace for vibe coding. Your coding agent's work becomes a block town: one building per feature, one block per file, built live while Claude Code writes.</p>
+    <div class="ctas">
+      <a class="btn" href="https://github.com/dharaneechinnu/codeville/releases">&#11015; Download for Windows</a>
+      <a class="btn alt" href="#demo">&#9654; Watch the demo</a>
+    </div>
+    <div class="video">
+      <video src="launch.mp4" poster="poster-launch.jpg" controls playsinline preload="metadata" aria-label="Codeville launch video, 30 seconds"></video>
+    </div>
+  </div>
+  <div class="grass"></div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What's in the window</h2>
+    <p class="sub">Everything your agent does, drawn so you can see it. No more scrolling through diffs to find out what was built.</p>
+    <div class="grid">
+      <div class="card"><div class="ico" style="background:var(--green)"></div><h3>Block town</h3><p>Each feature gets its own district: frontend, backend and test buildings, the database and outside services. Click any block to open the file.</p></div>
+      <div class="card"><div class="ico" style="background:var(--blue)"></div><h3>Chat with Claude Code</h3><p>Send a prompt and watch the edits, tools and sub-agents stream in, while new blocks drop into the town.</p></div>
+      <div class="card"><div class="ico" style="background:var(--yellow)"></div><h3>Tests you can see</h3><p>A shopper walks your test steps and stops at the one that fails, with what broke, where, and what to do next.</p></div>
+      <div class="card"><div class="ico" style="background:var(--purple)"></div><h3>Project analysis</h3><p>An agent reads your project: stack, layers, features, how the parts connect, and the commands that test and build it.</p></div>
+      <div class="card"><div class="ico" style="background:var(--red)"></div><h3>Source control</h3><p>Stage, commit and push in one click. If a push fails, it tells you why and what the next step is.</p></div>
+      <div class="card"><div class="ico" style="background:var(--cyan)"></div><h3>Hand control</h3><p>Turn on the camera and the town becomes a hologram. Rotate, zoom and reset with your hands. The camera picture never leaves your computer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="demo" style="background:#0A0E1E">
+  <div class="wrap">
+    <h2>90-second demo</h2>
+    <p class="sub">From first run to a pushed commit: analysis, the block town, a live chat build, a failing test, and hand control.</p>
+    <div class="video">
+      <video src="demo.mp4" poster="poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville demo video, 90 seconds"></video>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <h2>Get started</h2>
+    <p class="sub">Codeville runs on Windows. The installer bundles everything it needs, including Python.</p>
+    <ol class="steps" style="padding:0;margin:0">
+      <li><strong>Install</strong><br><span style="color:#C9CEF0">Download <code>Codeville-Setup.exe</code> from the Releases page and run it.</span></li>
+      <li><strong>Connect Claude Code</strong><br><span style="color:#C9CEF0">The welcome screen checks Git, Claude Code and Node.js and shows the plugin commands.</span></li>
+      <li><strong>Open a folder</strong><br><span style="color:#C9CEF0">Open a project, start one from a template, or copy a repository, and watch your town appear.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="end">
+  <div class="wrap">
+    <h2 class="pixel">Vibe code. See it build.</h2>
+    <p class="sub">Get the Windows installer from GitHub Releases.</p>
+    <a class="btn" href="https://github.com/dharaneechinnu/codeville/releases">&#11015; Download for Windows</a>
+  </div>
+</section>
+
+<footer>Codeville &middot; <a href="https://github.com/dharaneechinnu/codeville">github.com/dharaneechinnu/codeville</a></footer>
+</body>
+</html>

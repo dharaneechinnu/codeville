@@ -13,3 +13,6 @@ release/
 .env
 .env.*
 src/renderer/public/mediapipe/
+
+# promo soundtrack (regenerate with promo/render/music.mjs)
+promo/audio/

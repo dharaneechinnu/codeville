@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Codeville promo preview</title>
+<style>
+  @font-face { font-family: "Press Start 2P"; src: url(fonts/PressStart2P.ttf); }
+  @font-face { font-family: "Silkscreen"; font-weight: 700; src: url(fonts/Silkscreen-Bold.ttf); }
+  @font-face { font-family: "Space Grotesk"; font-weight: 700; src: url(fonts/SpaceGrotesk-Bold.ttf); }
+  html, body { margin: 0; background: #05060d; height: 100%; }
+  canvas { display: block; width: 100vw; height: 56.25vw; max-height: 100vh; max-width: 177.78vh; margin: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="engine.js"></script>
+<script src="parts.js"></script>
+<script src="launch.js"></script>
+<script src="demo.js"></script>
+<script>
+  // Open frame.html?scene=launch (or demo) in a browser to preview in real time.
+  // render.mjs loads it with &render=1 and calls CV.frame(t) for each frame.
+  const q = new URLSearchParams(location.search);
+  const sceneName = q.get('scene') || 'launch';
+  const ctx = document.getElementById('c').getContext('2d');
+  window.ready = Promise.all([
+    document.fonts.load('16px "Press Start 2P"'), document.fonts.load('700 16px Silkscreen'), document.fonts.load('700 16px "Space Grotesk"'),
+  ]).then(() => true);
+  CV.frame = (t, quality = 0.94) => {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+    CV.scenes[sceneName].render(ctx, t);
+    return ctx.canvas.toDataURL('image/jpeg', quality);
+  };
+  if (!q.get('render')) {
+    window.ready.then(() => {
+      const start = performance.now() - (parseFloat(q.get('t')) || 0) * 1000;
+      const loop = () => {
+        const t = ((performance.now() - start) / 1000) % CV.scenes[sceneName].duration;
+        ctx.setTransform(1, 0, 0, 1, 0, 0); CV.scenes[sceneName].render(ctx, t);
+        requestAnimationFrame(loop);
+      };
+      loop();
+    });
+  }
+</script>
+</body>
+</html>
