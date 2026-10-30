@@ -39,8 +39,13 @@ ap.add_argument("--voices", default="voices-v1.0.bin")
 ap.add_argument("--voice", default="am_michael")
 ap.add_argument("--speed", type=float, default=1.05)
 ap.add_argument("--duration", type=float, default=100.5)
+ap.add_argument("--script", help="a JSON file {duration, lines: [[seconds, text]]} to speak instead of LINES (compose.py writes real_voice.json)")
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "audio", "demo-voice.wav"))
 args = ap.parse_args()
+if args.script:
+    import json
+    spec = json.load(open(args.script))
+    LINES, args.duration = [tuple(x) for x in spec["lines"]], spec["duration"]
 
 kokoro = Kokoro(args.model, args.voices)
 sr = 24000

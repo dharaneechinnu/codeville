@@ -96,61 +96,24 @@
     if (t > 8.9) logo(ctx, W / 2, 210, 88, t, 8.9);
   }
 
-  // ---------- 12-17: chat, the cart district appears live ----------
-  const CHAT = {
-    prompt: 'add a shopping cart', typeAt: 12.35, sendAt: 13.45, cps: 18,
-    rows: [[CART_FE, 'WRITE', 'src/cart/Cart.tsx', PAL.blue], [CART_BE, 'WRITE', 'api/cart.py', PAL.green],
-      [15.15, 'EDIT', 'api/urls.py', PAL.green], [CART_TEST, 'WRITE', 'tests/test_cart.py', PAL.yellow]],
-    doneAt: 16.35, doneText: '16 files - cart is live',
-  };
+  // ---------- 12-26: the real app (promo/capture records it; mux.py lays it into this window) ----------
+  const SLOT = { x: 272, y: 236, w: 1376, h: 774 };
+  function slot(ctx, holo) {
+    ctx.fillStyle = holo ? 'rgba(92,242,255,0.12)' : 'rgba(5,6,13,0.25)'; ctx.fillRect(SLOT.x - 16, SLOT.y - 16, SLOT.w + 32, SLOT.h + 32);
+    ctx.fillStyle = '#05060d'; ctx.fillRect(SLOT.x - 6, SLOT.y - 6, SLOT.w + 12, SLOT.h + 12);
+    ctx.strokeStyle = holo ? PAL.cyan : '#fff'; ctx.lineWidth = 3; ctx.strokeRect(SLOT.x - 6, SLOT.y - 6, SLOT.w + 12, SLOT.h + 12);
+    tag(ctx, 'REAL APP', SLOT.x + SLOT.w - 70, SLOT.y + SLOT.h + 30, { size: 14, col: '#fff', bg: PAL.red });
+  }
   function live(ctx, t) {
-    sky(ctx, t);
-    const e = ease.inOut(prog(t, 12, 17));
-    const v = view({ scale: lerp(44, 52, e), cx: 1290, cy: 650, yaw: lerp(0.9, 1.05, e), fx: lerp(8, 11, e), fy: lerp(5, 6.5, e) });
-    drawTown(ctx, v, town, t, { ground: GROUND, hl: t > CART_FE ? CV.bByName(town, 'cart/ui').id : null });
-    // "+1" pops over each new cart block
-    for (const b of town.blocks) {
-      if (b.feature !== 'cart' || t < b.born || t > b.born + 0.8) continue;
-      const a = prog(t, b.born, b.born + 0.8), [sx, sy] = v.p(b.x + 0.5, b.y + 0.5, b.z + 1.4 + a * 1.5);
-      text(ctx, '+1', sx, sy, { size: 18, fam: 'pixel', col: '#fff', align: 'center', shadow: '#05060d', sd: 3, alpha: 1 - a });
-    }
-    CV.chat(ctx, 90, 250, 640, 700, t, CHAT);
+    sky(ctx, t); slot(ctx);
     headline(ctx, [['Prompt', PAL.cyan], ['it.', '#fff'], ['Watch', '#fff'], ['it', '#fff'], ['build.', '#fff'], ['Live.', PAL.red]], t, 12.15, W / 2, 130, { size: 84 });
   }
-
-  // ---------- 17-22: the shopper runs the tests ----------
-  const TILES = route([[0, 0], [9, 0], [9, 5]]);
-  const STEPS = [[0, 'Home'], [3, 'Login'], [6, 'Add item'], [10, 'Cart'], [14, 'Pay']];
-  const FAIL = 10, WALK0 = 17.9, SPEED = 5, FAIL_T = WALK0 + FAIL / SPEED;
-  const DECOR = [];
-  [[1, -3, PAL.blue, 3], [2, -3, PAL.blue, 2], [4, -3, PAL.green, 4], [5, -3, PAL.green, 3], [7, -3, PAL.yellow, 2], [10, -3, PAL.purple, 3],
-    [11, -3, PAL.purple, 2], [6, 3, PAL.blue, 1], [6, 4, PAL.blue, 2], [12, 1, PAL.green, 1]].forEach(([x, y, col, h], i) => {
-    for (let z = 0; z < h; z++) DECOR.push({ x: x + 0.03, y: y + 0.03, z, w: 0.94, d: 0.94, h: 0.94, col, o: { seed: i * 9 + z } });
-  });
   function tests(ctx, t) {
-    sky(ctx, t);
-    const s = Math.min(FAIL, Math.max(0, (t - WALK0) * SPEED)), failed = t >= FAIL_T;
-    const p = CV.shopperAt(TILES, s);
-    const v = view({ scale: 78, cx: 820, cy: 660, yaw: 0.8, fx: lerp(p.x, 6, 0.4), fy: lerp(p.y, 1.5, 0.4) });
-    testWorld(ctx, v, t, { ground: [-4, -5, 18, 14], tiles: TILES, steps: STEPS, s, failAt: FAIL, failed, failT: FAIL_T, walking: !failed && t > WALK0, decor: DECOR });
-    problemCard(ctx, 1230, 560, 610, t, FAIL_T + 0.25, {
-      title: 'TEST FAILED',
-      lines: [['cart total is wrong', '#fff'], ['expected 59.98, got 29.99', '#FF9AA6', 'mono'], ['Next: fix api/cart.py:42', '#8dffa8', 'mono']],
-    });
-    CV.promptPill(ctx, 60, 230, 640, 'test the checkout', t, 17.05, { sendAt: 17.85, cps: 30 });
+    sky(ctx, t); slot(ctx);
     headline(ctx, [['Tests', '#fff'], ['you', '#fff'], ['can', '#fff'], ['see.', PAL.green]], t, 17.15, W / 2, 130, { size: 96 });
   }
-
-  // ---------- 22-26: hologram + hand control ----------
   function holo(ctx, t) {
-    holoBg(ctx, t);
-    const k = t - 22, hx = 960 + Math.sin(k * 1.7) * 430, hy = 700 + Math.cos(k * 3.4) * 50;
-    const v = view({ scale: 44, cx: W / 2, cy: 640, yaw: 0.8 + Math.sin(k * 1.7) * 0.75, pitch: 0.62 + Math.cos(k * 3.4) * 0.08, fx: 8, fy: 5 });
-    drawTown(ctx, v, town, 99, { holo: true, ground: GROUND, labels: true });
-    hand(ctx, hx, hy + 80, 20);
-    tag(ctx, 'OPEN PALM  =  ROTATE', W / 2, 1000, { size: 18, col: PAL.cyan, bg: 'rgba(6,16,26,0.85)' });
-    const flick = t < 22.25 ? (Math.floor(t * 30) % 2 ? 0.6 : 0) : 0;
-    if (flick) { ctx.fillStyle = `rgba(92,242,255,${flick * 0.25})`; ctx.fillRect(0, 0, W, H); }
+    holoBg(ctx, t); slot(ctx, true);
     headline(ctx, [['Control', '#fff'], ['it', '#fff'], ['with', '#fff'], ['your', '#fff'], ['hands.', PAL.cyan]], t, 22.2, W / 2, 130, { size: 96 });
   }
 

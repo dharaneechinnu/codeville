@@ -2,7 +2,7 @@
 
 [![Codeville launch video](promo/preview.gif)](promo/launch.mp4)
 
-**Built for vibe coders: your prompts, made visual.** Watch the [30-second launch video](promo/launch.mp4) or the [demo](promo/demo.mp4),
+**Built for vibe coders: your prompts, made visual.** Watch the [30-second launch video](promo/launch.mp4) or the [demo of the real app](promo/demo.mp4),
 or open the [launch page](promo/index.html). [Download for Windows](https://github.com/dharaneechinnu/codeville/releases).
 
 A desktop workspace for vibe coding. It shows what your coding agent builds: a block town (one building per feature, one
@@ -144,23 +144,31 @@ Settings, Privacy and security, Camera, for desktop apps. The window is now serv
 
 ## Promo videos
 
-`promo/` holds the launch video (30 s), the demo (100 s), the launch page and the code that makes them. Everything is
-drawn on a canvas in `promo/render` (voxel town, pixel UI, kinetic text) and the soundtrack is synthesized, so there
-are no outside assets apart from three Google Fonts (OFL) in `promo/render/fonts`. The demo's voiceover is spoken by
-[Kokoro-82M](https://github.com/thewh1teagle/kokoro-onnx), an open-source (Apache 2.0) text-to-speech model that runs on
-the CPU (`pip install kokoro-onnx soundfile`, model files from its `model-files-v1.0` release); the lines and their times
-are at the top of `voice.py`, and the music ducks under the voice. To change and re-render:
+`promo/` holds the launch video (30 s), the demo (2:14), the launch page and the code that makes them. Both videos show
+the **real app**: the React and three.js UI talking to the real Django backend, opening a real sample project, running
+its real tests and pushing to a real git remote, recorded in Chromium. Two inputs are scripted for the recording, and the
+videos say so on screen: the agent (`promo/capture/bin/claude` stands in for `claude -p`; it writes real files and sends
+the same hook events as the Codeville plugin) and the hands (`promo/capture/hands.js` feeds hand points to the app's own
+gesture code in place of the camera model). The titles, captions, end card and music are drawn and synthesized in
+`promo/render`; the narration is spoken by [Kokoro-82M](https://github.com/thewh1teagle/kokoro-onnx), an open-source
+(Apache 2.0) text-to-speech model.
+
+To record and build again (Linux or macOS, with the backend's venv set up):
 
 ```
+python promo/capture/make_shop.py ~/work                       # the sample project and its git remote
+# start the backend with promo/capture/bin and a venv that has pytest on its PATH, and the UI: npm run dev:ui
+CV_HOME=~/.code-visualizer node promo/capture/record.mjs <rec dir> ~/work/shop-app   # needs <rec dir>/camera.y4m
+python promo/capture/frames_to_mp4.py <rec dir>                # the raw recording at 30 fps
+python promo/capture/compose.py <rec dir>                      # the edit, zooms and timeline
 cd promo/render
-node music.mjs                 # audio/launch.wav, audio/demo.wav
-python voice.py --model kokoro-v1.0.onnx --voices voices-v1.0.bin   # audio/demo-voice.wav
-node render.mjs launch         # ../launch.mp4 (Playwright Chromium + ffmpeg)
-node render.mjs demo
-node render.mjs demo --still 31.5   # one frame, to check a change
+python voice.py --script real_voice.json --out ../audio/real-voice.wav
+node music.mjs
+node render.mjs real --out real-frame.mp4 && python ../capture/mux.py <rec dir> real-frame.mp4 ../demo.mp4
+node render.mjs launch --out launch-frame.mp4 && python ../capture/mux.py <rec dir> launch-frame.mp4 ../launch.mp4 launch
 ```
 
-Open `promo/render/frame.html?scene=launch` (or `demo`) in a browser to preview in real time; add `&t=20` to start at 20 s.
+Open `promo/render/frame.html?scene=launch` (or `real`) in a browser to preview the overlay layer in real time.
 
 ## Not done yet
 

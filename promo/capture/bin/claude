@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Scripted stand-in for `claude -p` used only to record the demo with the real Codeville UI.
+
+It does what Claude Code does in a real session, in a fixed order: it writes and edits real files in the opened
+project and reports each step to the Codeville backend through the same hook calls the Codeville plugin sends
+(SessionStart, UserPromptSubmit, Pre/PostToolUse, SubagentStart/Stop, Stop). The UI cannot tell the difference,
+which is the point: every frame of the recording is the real app reacting to real events.
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
+import uuid
+
+if "--version" in sys.argv:
+    print("2.1.314 (Claude Code)")
+    sys.exit(0)
+
+prompt = sys.argv[sys.argv.index("-p") + 1] if "-p" in sys.argv else ""
+cwd = os.getcwd()
+home = os.environ.get("CV_HOME") or os.path.expanduser("~/.code-visualizer")
+cfg = json.load(open(os.path.join(home, "config.json")))
+sid = str(uuid.uuid4())
+pace = float(os.environ.get("CV_DEMO_PACE", "1"))
+
+
+def hook(name, **kw):
+    body = {"hook_event_name": name, "session_id": sid, "cwd": cwd, **kw}
+    req = urllib.request.Request(f"http://127.0.0.1:{cfg['port']}/hook/claude-code", data=json.dumps(body).encode(),
+                                 headers={"content-type": "application/json", "x-cv-token": cfg["token"]})
+    urllib.request.urlopen(req, timeout=5).read()
+
+
+def wait(s):
+    time.sleep(s * pace)
+
+
+def tool(name, inp, run=None, response=None, gap=0.9):
+    tid = "toolu_" + uuid.uuid4().hex[:12]
+    hook("PreToolUse", tool_name=name, tool_input=inp, tool_use_id=tid)
+    wait(gap)
+    if run:
+        response = run()
+    hook("PostToolUse", tool_name=name, tool_input=inp, tool_use_id=tid, tool_response=response or {})
+    wait(0.35)
+
+
+def write(rel, text):
+    path = os.path.join(cwd, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return {"type": "create", "filePath": path}
+
+
+def edit(rel, old, new):
+    path = os.path.join(cwd, rel)
+    s = open(path, encoding="utf-8").read()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(s.replace(old, new))
+    return {"filePath": path}
+
+
+def bash(cmd, where):
+    p = subprocess.run(cmd, shell=True, cwd=os.path.join(cwd, where), capture_output=True, text=True)
+    return {"stdout": p.stdout, "stderr": p.stderr, "exit_code": p.returncode}
+
+
+hook("SessionStart", source="startup", model="claude-sonnet")
+wait(0.4)
+hook("UserPromptSubmit", prompt=prompt)
+wait(1.0)
+low = prompt.lower()
+
+if "wishlist" in low:
+    tool("Read", {"file_path": os.path.join(cwd, "frontend/src/features/catalog/ProductCard.tsx")}, gap=0.7)
+    tool("Read", {"file_path": os.path.join(cwd, "backend/store/urls.py")}, gap=0.6)
+    hook("SubagentStart", agent_id="plan-1", agent_type="Plan")
+    wait(1.4)
+    hook("SubagentStop", agent_id="plan-1", agent_type="Plan")
+    wait(0.4)
+    tool("Write", {"file_path": os.path.join(cwd, "frontend/src/features/wishlist/Wishlist.tsx")}, run=lambda: write("frontend/src/features/wishlist/Wishlist.tsx", """import { useEffect, useState } from 'react';
+import { get } from '../../api';
+import type { Product } from '../catalog/ProductCard';
+
+export function Wishlist() {
+  const [items, setItems] = useState<Product[]>([]);
+  useEffect(() => { void get<Product[]>('/wishlist/').then(setItems); }, []);
+  return <ul>{items.map((p) => <li key={p.id}>{p.name}</li>)}</ul>;
+}
+"""))
+    tool("Write", {"file_path": os.path.join(cwd, "frontend/src/features/wishlist/HeartButton.tsx")}, run=lambda: write("frontend/src/features/wishlist/HeartButton.tsx", """import { post } from '../../api';
+
+export function HeartButton({ productId }: { productId: number }) {
+  return <button aria-label="Save to wishlist" onClick={() => void post('/wishlist/', { product: productId })}>♥</button>;
+}
+"""))
+    tool("Write", {"file_path": os.path.join(cwd, "backend/store/wishlist.py")}, run=lambda: write("backend/store/wishlist.py", '''"""Wishlist rules, kept free of Django so they are easy to test."""
+
+
+def toggle(saved, product_id):
+    """Adds the product, or removes it when it is already saved."""
+    return [p for p in saved if p != product_id] if product_id in saved else saved + [product_id]
+'''))
+    tool("Write", {"file_path": os.path.join(cwd, "backend/store/wishlist_api.py")}, run=lambda: write("backend/store/wishlist_api.py", '''from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+from .wishlist import toggle
+
+SAVED = []
+
+
+@api_view(["GET", "POST"])
+def wishlist(request):
+    global SAVED
+    if request.method == "POST":
+        SAVED = toggle(SAVED, request.data["product"])
+    return Response(SAVED)
+'''))
+    tool("Edit", {"file_path": os.path.join(cwd, "backend/store/urls.py")}, run=lambda: edit("backend/store/urls.py", "from . import auth, catalog, cart, payment\n", "from . import auth, catalog, cart, payment, wishlist_api\n") and edit("backend/store/urls.py", "]\n", '    path("api/wishlist/", wishlist_api.wishlist),\n]\n'))
+    tool("Write", {"file_path": os.path.join(cwd, "backend/tests/test_wishlist.py")}, run=lambda: write("backend/tests/test_wishlist.py", '''from store.wishlist import toggle
+
+
+def test_save_to_wishlist():
+    assert toggle([], 7) == [7]
+
+
+def test_remove_from_wishlist():
+    assert toggle([7, 9], 7) == [9]
+'''))
+    tool("Bash", {"command": "pytest -v tests/test_wishlist.py", "description": "Run the wishlist tests"}, run=lambda: bash("python -m pytest -v tests/test_wishlist.py", "backend"), gap=1.2)
+    msg = "Added a wishlist: a heart button on each product, a Wishlist page, a /api/wishlist/ endpoint and two tests. Both tests pass."
+elif "cart" in low or "fix" in low:
+    tool("Read", {"file_path": os.path.join(cwd, "backend/store/pricing.py")}, gap=0.8)
+    tool("Edit", {"file_path": os.path.join(cwd, "backend/store/pricing.py")}, run=lambda: edit("backend/store/pricing.py", 'line["price"] for line in lines', 'line["price"] * line["quantity"] for line in lines'), gap=1.0)
+    tool("Bash", {"command": "pytest -v", "description": "Run all backend tests"}, run=lambda: bash("python -m pytest -v", "backend"), gap=1.4)
+    msg = "Fixed the cart total: it now multiplies each price by its quantity. All 8 backend tests pass."
+else:
+    msg = "Done."
+
+hook("Stop", last_assistant_message=msg)
+print(msg)

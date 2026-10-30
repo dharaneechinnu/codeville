@@ -1,6 +1,6 @@
 // Original 8-bit soundtrack and sound effects for the promo videos, synthesized from scratch (no samples).
 //   node music.mjs   -> ../audio/launch.wav and ../audio/demo.wav
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -126,4 +126,24 @@ function save(T, name, fadeOut = 1.2) {
   for (const [s, n] of [[45.8, 5], [46.9, 4], [49.1, 2]]) for (let k = 0; k < n; k++) inst.pop(T, s + k * 0.13 + 0.15, 0.1, 700 + k * 40);
   inst.ding(T, 51.2, 0.1); inst.fail(T, 56.9 + 12 / 1.95, 0.16); inst.ding(T, 77.5, 0.12); inst.hit(T, 93.0, 0.45);
   save(T0, 'demo', 2);
+}
+
+// ---------- real-UI demo: follows the timeline compose.py wrote ----------
+{
+  const src = readFileSync(path.join(here, 'real_timeline.js'), 'utf8');
+  const R = JSON.parse(src.slice(src.indexOf('{'), src.lastIndexOf('}') + 1));
+  const holo = R.scenes.find((s) => s.key === 'holo');
+  const T = track(R.total);
+  music(T, 100, (t) => {
+    if (t < R.intro) return { arp: 0.08, hat: 0.05, kick: 0.4 };
+    if (t >= R.uiEnd) return { arp: 0.08, bass: 0.22, hat: 0.06, kick: 0.45, snare: 0.18, lead: 0.07 };
+    if (t >= holo.start) return { pad: 0.11, arp: 0.05, hat: 0.04, kick: 0.22 };
+    return { arp: 0.055, bass: 0.17, hat: 0.045, kick: t > R.scenes[1].start ? 0.28 : 0, snare: t > R.scenes[2].start ? 0.1 : 0 };
+  });
+  inst.pop(T, 0.15, 0.15, 520); inst.pop(T, 0.4, 0.15, 780);
+  for (let i = 0; i < 25; i++) inst.click(T, 0.95 + i / 26, 0.08);
+  for (const s of R.scenes) inst.whoosh(T, s.start - 0.3, 0.16);
+  inst.whoosh(T, holo.start + 0.2, 0.25);
+  inst.whoosh(T, R.uiEnd - 0.45, 0.22); inst.hit(T, R.uiEnd, 0.45);
+  save(T, 'real', 2);
 }

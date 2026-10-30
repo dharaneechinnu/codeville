@@ -1,0 +1,65 @@
+{
+ "duration": 133.53,
+ "lines": [
+  [
+   0.4,
+   "Codeville. Built for vibe coders."
+  ],
+  [
+   4.0,
+   "This is the real Codeville app. It checks Git, Claude Code and Node, then you open your project."
+  ],
+  [
+   13.120000000000001,
+   "An analysis agent reads it: the stack, the layers, every feature, and how they connect."
+  ],
+  [
+   23.049999999999997,
+   "Your prompts, made visual. Each feature is a district, and every file is a block."
+  ],
+  [
+   30.65,
+   "Pick a file, and the town shows where it lives. Open it right in the editor."
+  ],
+  [
+   37.65,
+   "Links show how the parts talk to each other."
+  ],
+  [
+   44.419,
+   "Now, just prompt. Ask Claude Code for a wishlist feature..."
+  ],
+  [
+   53.519,
+   "and watch every file it writes land in your project, live, with its tests."
+  ],
+  [
+   67.06700000000001,
+   "Run the tests, and a shopper walks every case."
+  ],
+  [
+   73.167,
+   "It stops at the broken one, and tells you what to fix next."
+  ],
+  [
+   80.107,
+   "So ask Claude to fix it. All eight tests pass."
+  ],
+  [
+   91.307,
+   "Then ship it. Stage, commit and push, in one click."
+  ],
+  [
+   103.167,
+   "And the fun part. Turn on your camera, and your code becomes a hologram, like Tony Stark's lab."
+  ],
+  [
+   113.36699999999999,
+   "Spread two hands to zoom, make a fist to hold, and pinch twice to reset."
+  ],
+  [
+   129.4303863636364,
+   "Codeville. Vibe code. See it build."
+  ]
+ ]
+}
