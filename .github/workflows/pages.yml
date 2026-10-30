@@ -1,0 +1,35 @@
+# Publishes the launch site (site/) to GitHub Pages, with the films from promo/.
+# One-time setup: Settings > Pages > Build and deployment > Source: GitHub Actions.
+name: Launch site
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'promo/*.mp4', 'promo/poster-*.jpg', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add the films
+        run: cp promo/launch.mp4 promo/social.mp4 promo/demo.mp4 promo/poster-launch.jpg promo/poster-social.jpg promo/poster-demo.jpg site/media/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

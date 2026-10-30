@@ -3,8 +3,8 @@
 //   node render.mjs demo --still 31.5     -> still-demo-31.5.jpg in the current folder
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { writeFileSync, existsSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -15,11 +15,20 @@ const name = args[0] || 'launch';
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const fps = +opt('--fps', 30), workers = +opt('--workers', 4);
 const out = opt('--out', path.join(here, '..', `${name}.mp4`));
-const url = pathToFileURL(path.join(here, 'frame.html')).href + `?scene=${name}&render=1`;
+// Pages are served from one made-up origin so recorded frames (--shots <dir>) can be drawn on the canvas and exported.
+const shotsDir = opt('--shots');
+const url = `http://promo.local/render/frame.html?scene=${name}&render=1` + (shotsDir ? '&shots=/shots' : '');
+const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.ttf': 'font/ttf', '.jpg': 'image/jpeg' };
 
 const browser = await chromium.launch();
 async function page() {
   const p = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  await p.route('http://promo.local/**', (r) => {
+    const u = new URL(r.request().url()).pathname;
+    const file = u.startsWith('/shots/') && shotsDir ? path.join(shotsDir, u.slice(7)) : path.join(here, u.replace(/^\/render\//, ''));
+    if (!existsSync(file)) return r.fulfill({ status: 404, body: '' });
+    r.fulfill({ body: readFileSync(file), contentType: TYPES[path.extname(file)] || 'application/octet-stream' });
+  });
   p.on('pageerror', (e) => { console.error('page error:', e.message); process.exit(1); });
   await p.goto(url);
   await p.evaluate(() => window.ready);

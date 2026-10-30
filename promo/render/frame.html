@@ -7,6 +7,9 @@
   @font-face { font-family: "Press Start 2P"; src: url(fonts/PressStart2P.ttf); }
   @font-face { font-family: "Silkscreen"; font-weight: 700; src: url(fonts/Silkscreen-Bold.ttf); }
   @font-face { font-family: "Space Grotesk"; font-weight: 700; src: url(fonts/SpaceGrotesk-Bold.ttf); }
+  @font-face { font-family: "Bricolage Grotesque"; font-weight: 800; src: url(fonts/BricolageGrotesque-ExtraBold.ttf); }
+  @font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(fonts/InstrumentSans-Medium.ttf); }
+  @font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(fonts/InstrumentSans-Bold.ttf); }
   html, body { margin: 0; background: #05060d; height: 100%; }
   canvas { display: block; width: 100vw; height: 56.25vw; max-height: 100vh; max-width: 177.78vh; margin: auto; image-rendering: pixelated; }
 </style>
@@ -19,6 +22,8 @@
 <script src="demo.js"></script>
 <script src="real_timeline.js"></script>
 <script src="real.js"></script>
+<script src="pro_timeline.js"></script>
+<script src="pro.js"></script>
 <script>
   // Open frame.html?scene=launch (or demo) in a browser to preview in real time.
   // render.mjs loads it with &render=1 and calls CV.frame(t) for each frame.
@@ -27,10 +32,13 @@
   const ctx = document.getElementById('c').getContext('2d');
   window.ready = Promise.all([
     document.fonts.load('16px "Press Start 2P"'), document.fonts.load('700 16px Silkscreen'), document.fonts.load('700 16px "Space Grotesk"'),
+    document.fonts.load('800 16px "Bricolage Grotesque"'), document.fonts.load('500 16px "Instrument Sans"'), document.fonts.load('700 16px "Instrument Sans"'),
   ]).then(() => true);
-  CV.frame = (t, quality = 0.94) => {
+  CV.frame = async (t, quality = 0.94) => {
+    const sc = CV.scenes[sceneName];
+    if (sc.prepare) await sc.prepare(t); // scenes that show recorded frames load them first
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
-    CV.scenes[sceneName].render(ctx, t);
+    sc.render(ctx, t);
     return ctx.canvas.toDataURL('image/jpeg', quality);
   };
   if (!q.get('render')) {
@@ -38,7 +46,9 @@
       const start = performance.now() - (parseFloat(q.get('t')) || 0) * 1000;
       const loop = () => {
         const t = ((performance.now() - start) / 1000) % CV.scenes[sceneName].duration;
-        ctx.setTransform(1, 0, 0, 1, 0, 0); CV.scenes[sceneName].render(ctx, t);
+        const sc = CV.scenes[sceneName];
+        if (sc.prepare) sc.prepare(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0); sc.render(ctx, t);
         requestAnimationFrame(loop);
       };
       loop();

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Codeville</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Codeville is a desktop workspace for vibe coding. Every prompt becomes a block town you can explore, test and steer with your hands.">
+<meta property="og:title" content="Codeville: built for vibe coders">
+<meta property="og:description" content="See what your AI builds. A block town for every project, tests you can watch, and a hologram you steer with your hands.">
+<meta property="og:image" content="media/poster-launch.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='13' width='12' height='12' rx='2' fill='%234285F4'/%3E%3Crect x='17' y='13' width='12' height='12' rx='2' fill='%2334A853'/%3E%3Crect x='10' y='2' width='12' height='12' rx='2' fill='%23EA4335'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Press+Start+2P&display=swap">
+<style>
+  /* Layout: one centred column; the hero puts the film in a laptop, the tour alternates text and real-app loops. */
+  :root {
+    --bg: #FFFFFF; --bg-2: #F5F6FA; --ink: #0B1020; --muted: #5B6178; --line: #E3E6EF; --card: #FFFFFF;
+    --blue: #4285F4; --red: #EA4335; --yellow: #F5B400; --green: #34A853; --cyan: #12B5CB;
+    --bezel: #16181F; --code-bg: #0E1324; --code-fg: #D4DAFF; --shadow: 0 30px 80px -30px rgba(11, 16, 32, .35);
+    --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --f-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", Consolas, monospace;
+    --f-pixel: "Press Start 2P", "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #070A14; --bg-2: #0D1220; --ink: #EEF0FA; --muted: #9AA1BC; --line: #1E2538; --card: #10162A;
+      --yellow: #FBBC05; --cyan: #5CF2FF; --bezel: #2A2F3D; --shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #070A14; --bg-2: #0D1220; --ink: #EEF0FA; --muted: #9AA1BC; --line: #1E2538; --card: #10162A;
+    --yellow: #FBBC05; --cyan: #5CF2FF; --bezel: #2A2F3D; --shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 18px/1.6 var(--f-body); -webkit-font-smoothing: antialiased; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+  a { color: inherit; }
+  img, video { max-width: 100%; display: block; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  h1, h2, h3 { font-family: var(--f-display); font-weight: 800; letter-spacing: -0.02em; line-height: 1.04; margin: 0; text-wrap: balance; }
+  .eyebrow { font: 11px/1.6 var(--f-pixel); letter-spacing: .06em; color: var(--muted); display: inline-flex; align-items: center; gap: 10px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 8px; height: 8px; display: block; }
+  .dots i:nth-child(1) { background: var(--blue); } .dots i:nth-child(2) { background: var(--red); } .dots i:nth-child(3) { background: var(--yellow); } .dots i:nth-child(4) { background: var(--green); }
+
+  /* nav */
+  header.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--line); }
+  header.nav .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 800 22px var(--f-display); letter-spacing: -0.02em; }
+  .brand svg { width: 28px; height: 28px; }
+  nav.links { display: flex; gap: 26px; margin-left: auto; font-weight: 500; font-size: 16px; }
+  nav.links a { text-decoration: none; color: var(--muted); }
+  nav.links a:hover { color: var(--ink); }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 999px; font: 700 16px var(--f-body); text-decoration: none; border: 0; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+  .btn:focus-visible, .chapters button:focus-visible, nav.links a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+  .btn.primary { background: var(--blue); color: #fff; box-shadow: 0 12px 30px -10px rgba(66, 133, 244, .7); }
+  .btn.primary:hover { transform: translateY(-1px); box-shadow: 0 16px 36px -10px rgba(66, 133, 244, .8); }
+  .btn.ghost { background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); }
+  .btn.small { padding: 10px 18px; font-size: 15px; }
+
+  /* hero */
+  .hero { padding-block: 84px 40px; text-align: center; position: relative; overflow: hidden; }
+  .hero h1 { font-size: clamp(48px, 8.6vw, 112px); margin-top: 22px; }
+  .hero h1 .c1 { color: var(--blue); }
+  .hero .lede { max-width: 640px; margin: 24px auto 0; font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); }
+  .hero .ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
+  .note { font-size: 14px; color: var(--muted); margin-top: 14px; }
+  .cube { position: absolute; width: 34px; height: 34px; transform: rotate(45deg) skew(-8deg, -8deg); border-radius: 6px; opacity: .9; animation: bob 6s ease-in-out infinite; }
+  @keyframes bob { 50% { translate: 0 -14px; } }
+  .laptop { margin: 64px auto 0; max-width: 1040px; position: relative; }
+  .laptop .screen { background: var(--bezel); border-radius: 22px; padding: 16px; box-shadow: var(--shadow); }
+  .laptop video { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: #000; }
+  .laptop .base { height: 18px; margin: 0 -7%; border-radius: 0 0 24px 24px; background: linear-gradient(#D9DCE4, #A9AEBB); position: relative; }
+  .laptop .base::after { content: ""; position: absolute; left: 50%; top: 0; width: 140px; height: 7px; translate: -50% 0; border-radius: 0 0 8px 8px; background: #8D93A1; }
+  .works { display: flex; flex-wrap: wrap; gap: 10px 26px; justify-content: center; margin-top: 54px; color: var(--muted); font-size: 15px; }
+  .works b { color: var(--ink); font-weight: 600; }
+
+  /* sections */
+  section { padding-block: 96px; }
+  section.alt { background: var(--bg-2); }
+  .head { max-width: 720px; margin-bottom: 56px; }
+  .head h2 { font-size: clamp(36px, 5vw, 60px); margin-top: 14px; }
+  .head p { color: var(--muted); font-size: 20px; margin: 18px 0 0; }
+
+  /* feature tour */
+  .feature { display: grid; grid-template-columns: 1fr 1.35fr; gap: 56px; align-items: center; }
+  .feature + .feature { margin-top: 96px; }
+  .feature.flip { grid-template-columns: 1.35fr 1fr; }
+  .feature.flip .copy { order: 2; }
+  .feature .copy { min-width: 0; }
+  .feature .tag { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--f-body); color: var(--muted); }
+  .feature .tag::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+  .feature h3 { font-size: clamp(30px, 3.6vw, 44px); margin: 12px 0 16px; }
+  .feature p { color: var(--muted); margin: 0; }
+  .feature ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .feature li { display: flex; gap: 12px; align-items: baseline; }
+  .feature li::before { content: ""; flex: none; width: 8px; height: 8px; background: var(--c); translate: 0 -2px; }
+  .window { background: var(--bezel); border-radius: 18px; padding: 10px; box-shadow: var(--shadow); min-width: 0; }
+  .window .bar { display: flex; gap: 7px; padding: 4px 6px 10px; }
+  .window .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3A3F4D; }
+  .window video { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: #000; }
+  .caption { font-size: 13px; color: var(--muted); margin-top: 12px; text-align: center; }
+
+  /* demo film */
+  .film { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start; }
+  .film .window { padding: 12px; }
+  .chapters { display: grid; gap: 6px; min-width: 0; }
+  .chapters button { all: unset; cursor: pointer; display: grid; grid-template-columns: 52px 1fr; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .chapters button:hover { border-color: var(--blue); }
+  .chapters button[aria-current="true"] { border-color: var(--blue); box-shadow: inset 4px 0 0 var(--blue); }
+  .chapters .t { font: 500 13px var(--f-mono); color: var(--muted); padding-top: 2px; font-variant-numeric: tabular-nums; }
+  .chapters .n { font-weight: 600; font-size: 16px; }
+  .honest { margin-top: 18px; font-size: 14px; color: var(--muted); }
+
+  /* how it works */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px; min-width: 0; }
+  .step .num { width: 44px; height: 44px; display: grid; place-items: center; font: 14px var(--f-pixel); color: #fff; border-radius: 10px; margin-bottom: 18px; }
+  .step h3 { font-size: 26px; margin-bottom: 10px; }
+  .step p { color: var(--muted); margin: 0; font-size: 17px; }
+  pre { margin: 16px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--code-bg); color: var(--code-fg); font: 500 13.5px/1.7 var(--f-mono); overflow-x: auto; }
+
+  /* press kit */
+  .kit { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .kit figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; min-width: 0; }
+  .kit video { width: 100%; aspect-ratio: 16 / 9; background: #000; }
+  .kit figcaption { padding: 16px 18px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .kit figcaption b { font-weight: 600; }
+  .kit figcaption span { color: var(--muted); font: 500 13px var(--f-mono); }
+
+  /* faq */
+  .faq { max-width: 820px; }
+  details { border-top: 1px solid var(--line); padding: 22px 0; }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; font: 700 21px var(--f-body); list-style: none; display: flex; justify-content: space-between; gap: 20px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font: 400 28px/1 var(--f-body); color: var(--muted); transition: rotate .2s; }
+  details[open] summary::after { rotate: 45deg; }
+  summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; border-radius: 6px; }
+  details p { color: var(--muted); margin: 12px 0 0; max-width: 68ch; }
+
+  /* final cta + footer */
+  .final { text-align: center; padding-block: 120px; position: relative; overflow: hidden; }
+  .final h2 { font-size: clamp(42px, 7vw, 88px); }
+  .final h2 span:nth-child(1) { color: var(--blue); } .final h2 span:nth-child(2) { color: var(--red); } .final h2 span:nth-child(3) { color: var(--yellow); } .final h2 span:nth-child(4) { color: var(--green); }
+  .final .ctas { margin-top: 36px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  footer { border-top: 1px solid var(--line); padding-block: 34px; color: var(--muted); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 30px; justify-content: space-between; align-items: center; }
+  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+
+  @media (max-width: 900px) {
+    nav.links { display: none; }
+    .feature, .feature.flip, .film { grid-template-columns: 1fr; gap: 28px; }
+    .feature.flip .copy { order: 0; }
+    .steps, .kit { grid-template-columns: 1fr; }
+    section { padding-block: 72px; }
+    .hero { padding-block: 56px 24px; }
+    .cube { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .cube { animation: none; } .btn { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Codeville home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="12" height="12" rx="2" fill="#4285F4"/><rect x="17" y="13" width="12" height="12" rx="2" fill="#34A853"/><rect x="10" y="2" width="12" height="12" rx="2" fill="#EA4335"/><rect x="10" y="24" width="12" height="6" rx="2" fill="#F5B400"/></svg>
+      Codeville
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#features">Features</a><a href="#film">Demo</a><a href="#start">Get started</a><a href="#faq">FAQ</a>
+    </nav>
+    <a class="btn primary small" href="https://github.com/dharaneechinnu/codeville/releases">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <span class="cube" style="background:var(--blue);left:7%;top:150px"></span>
+    <span class="cube" style="background:var(--red);right:9%;top:120px;animation-delay:-2s"></span>
+    <span class="cube" style="background:var(--yellow);left:12%;top:420px;animation-delay:-4s;width:24px;height:24px"></span>
+    <span class="cube" style="background:var(--green);right:13%;top:380px;animation-delay:-1s;width:26px;height:26px"></span>
+    <div class="wrap">
+      <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>BUILT FOR VIBE CODERS</span>
+      <h1>See what your AI <span class="c1">builds.</span></h1>
+      <p class="lede">Codeville turns every prompt into a block town you can explore. Watch Claude Code build it live, see exactly which test broke, and steer it all with your hands.</p>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/dharaneechinnu/codeville/releases">Download for Windows</a>
+        <a class="btn ghost" href="#film">Watch the demo</a>
+      </div>
+      <p class="note">For Windows · Python is bundled · Works with Claude Code</p>
+      <div class="laptop">
+        <div class="screen"><video id="hero-film" src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="metadata" aria-label="Codeville launch film, 30 seconds"></video></div>
+        <div class="base" aria-hidden="true"></div>
+      </div>
+      <div class="works" aria-label="What it works with"><span>Works with <b>Claude Code</b></span><span><b>Git</b> built in</span><span><b>React</b>, <b>Django</b>, <b>Node</b> and <b>Python</b> projects</span><span>Runs on <b>your PC</b></span></div>
+    </div>
+  </div>
+
+  <section id="features" class="alt">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>THE TOUR</span>
+        <h2>Your prompts, made visual.</h2>
+        <p>Every clip below is the real app, recorded on a sample online store.</p>
+      </div>
+
+      <div class="feature" style="--c:var(--blue)">
+        <div class="copy">
+          <span class="tag">Block town</span>
+          <h3>Every feature, a district. Every file, a block.</h3>
+          <p>Open a project and Codeville draws it as a town: one district per feature, one building per layer, one block per file.</p>
+          <ul><li>Frontend, backend, tests, database and outside services, each in its own colour</li><li>Links show calls, imports and database use, with packets moving along them</li><li>Click a block to see the file and open it in the editor</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-town.mp4" poster="media/clip-town.jpg" autoplay muted loop playsinline aria-label="The block town rotating"></video></div>
+      </div>
+
+      <div class="feature flip" style="--c:var(--green)">
+        <div class="copy">
+          <span class="tag">Prompt it</span>
+          <h3>Type a prompt. Watch it build.</h3>
+          <p>Send a prompt to Claude Code from the chat. Every edit, tool call and sub-agent shows up as it happens, and new files land in the town as they are written.</p>
+          <ul><li>Runs in the folder you opened, with your own Claude Code settings</li><li>Each file write pulses on its building</li><li>The changes list fills in for review</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-prompt.mp4" poster="media/clip-prompt.jpg" autoplay muted loop playsinline aria-label="A prompt building a wishlist feature"></video></div>
+      </div>
+
+      <div class="feature" style="--c:var(--red)">
+        <div class="copy">
+          <span class="tag">Test view</span>
+          <h3>Tests you can see.</h3>
+          <p>Press play and a shopper walks your tests one by one. It stops at the one that fails and says what broke, where, and what to do next.</p>
+          <ul><li>Finds your project's own test, lint, type and build commands</li><li>Every test case becomes a step on the route</li><li>Failures name the file and the next step</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-tests.mp4" poster="media/clip-tests.jpg" autoplay muted loop playsinline aria-label="A test run stopping at a failing test"></video></div>
+      </div>
+
+      <div class="feature flip" style="--c:var(--yellow)">
+        <div class="copy">
+          <span class="tag">Project analysis</span>
+          <h3>It reads your project first.</h3>
+          <p>An analysis agent works out what the project is from its README, its frontend, backend, database and outside services, and how the parts connect.</p>
+          <ul><li>Reports each step live as it reads</li><li>Groups files into features across layers</li><li>The same tools are open to any agent over a local API</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-analysis.mp4" poster="media/clip-analysis.jpg" autoplay muted loop playsinline aria-label="The project analysis report"></video></div>
+      </div>
+
+      <div class="feature" style="--c:var(--blue)">
+        <div class="copy">
+          <span class="tag">Source control</span>
+          <h3>Ship it in one click.</h3>
+          <p>Stage, commit, and commit and push from the same window. When something fails, the message says what broke and the next step.</p>
+          <ul><li>Git badges on every changed file</li><li>Uses the git login already on your computer</li><li>No credentials stored by the app</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-git.mp4" poster="media/clip-git.jpg" autoplay muted loop playsinline aria-label="Committing and pushing to origin/main"></video></div>
+      </div>
+
+      <div class="feature flip" style="--c:var(--cyan)">
+        <div class="copy">
+          <span class="tag">Hologram mode</span>
+          <h3>Steer your code with your hands.</h3>
+          <p>Turn on the camera and the town becomes a hologram. Move an open hand to turn it, spread two hands to zoom, make a fist to hold, and pinch twice to reset.</p>
+          <ul><li>Hand tracking runs on your computer with MediaPipe</li><li>No camera picture leaves your PC</li><li>Uses the webcam you already have</li></ul>
+        </div>
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><video src="media/clip-holo.mp4" poster="media/clip-holo.jpg" autoplay muted loop playsinline aria-label="The hologram town following hand gestures"></video></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="film">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>THE DEMO</span>
+        <h2>Two minutes, start to ship.</h2>
+        <p>From the first run to a pushed commit, narrated, in the real app.</p>
+      </div>
+      <div class="film">
+        <div class="window"><video id="demo" src="media/demo.mp4" poster="media/poster-demo.jpg" controls playsinline preload="metadata" aria-label="Codeville narrated demo, 2 minutes 14 seconds"></video></div>
+        <div class="chapters" id="chapters" role="list" aria-label="Demo chapters"></div>
+      </div>
+      <p class="honest">Recorded in the real app on a sample project. The agent's steps and the hand input are scripted for the recording, and the video says so on screen.</p>
+    </div>
+  </section>
+
+  <section id="start" class="alt">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GET STARTED</span>
+        <h2>Up and running in three steps.</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><div class="num" style="background:var(--blue)">1</div><h3>Install</h3><p>Download the installer from GitHub Releases and run it. It brings its own Python, so there is nothing else to set up.</p></div>
+        <div class="step"><div class="num" style="background:var(--red)">2</div><h3>Connect Claude Code</h3><p>The welcome screen checks Git, Claude Code and Node.js, then adds the Codeville plugin in one click. Or do it yourself:</p>
+<pre><code>/plugin marketplace add &lt;plugin folder&gt;
+/plugin install code-visualizer@code-visualizer</code></pre></div>
+        <div class="step"><div class="num" style="background:var(--green)">3</div><h3>Open a project</h3><p>Open a folder, start one from a template (Empty, Node, Python), or copy a repository. Your town appears in seconds.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="press">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>PRESS KIT</span>
+        <h2>Films to share.</h2>
+        <p>Use them in posts, talks and write-ups.</p>
+      </div>
+      <div class="kit">
+        <figure><video src="media/launch.mp4" poster="media/poster-launch.jpg" controls playsinline preload="none"></video><figcaption><b>Launch film</b><span>0:30 · 1080p</span></figcaption></figure>
+        <figure><video src="media/social.mp4" poster="media/poster-social.jpg" controls playsinline preload="none"></video><figcaption><b>Social cut</b><span>0:15 · 1080p</span></figcaption></figure>
+        <figure><video src="media/demo.mp4" poster="media/poster-demo.jpg" controls playsinline preload="none"></video><figcaption><b>Narrated demo</b><span>2:14 · 1080p</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="alt">
+    <div class="wrap">
+      <div class="head"><span class="eyebrow"><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>FAQ</span><h2>Questions, answered.</h2></div>
+      <div class="faq">
+        <details><summary>Which systems does it run on?</summary><p>Codeville is a Windows app. The installer is not code signed yet, so Windows SmartScreen shows a warning the first time; choose More info, then Run anyway.</p></details>
+        <details><summary>Does my code leave my computer?</summary><p>No. The backend listens on your computer only and every call needs a local token. Hand tracking runs on your computer too, and no camera picture leaves it. Claude Code itself talks to Anthropic as it always does.</p></details>
+        <details><summary>Which coding agents work with it?</summary><p>Claude Code, through the Codeville plugin that forwards its hook events. Any other agent can use the same project tools (project map, analysis, test runs, git status) over the app's local HTTP API.</p></details>
+        <details><summary>What kinds of projects can I open?</summary><p>Any folder. The analysis recognises common stacks such as React, Vite, Django, Node and Python, finds your test, lint, type check and build commands, and groups files into features.</p></details>
+        <details><summary>Do I need a camera?</summary><p>Only for hologram mode. Everything else works with a mouse: rotate, zoom and reset buttons sit in the corner of the town.</p></details>
+        <details><summary>What do I need installed?</summary><p>Git and Claude Code. Node.js for JavaScript projects. Python is bundled with the app, so you do not need to install it.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <span class="cube" style="background:var(--green);left:10%;top:90px"></span>
+    <span class="cube" style="background:var(--blue);right:12%;top:150px;animation-delay:-3s"></span>
+    <div class="wrap">
+      <h2><span>Vibe</span> <span>code.</span> <span>See</span> <span>it</span> build.</h2>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/dharaneechinnu/codeville/releases">Download for Windows</a>
+        <a class="btn ghost" href="https://github.com/dharaneechinnu/codeville">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Codeville · Built for vibe coders</span>
+    <nav aria-label="Footer"><a href="https://github.com/dharaneechinnu/codeville">GitHub</a><a href="https://github.com/dharaneechinnu/codeville/releases">Releases</a><a href="#faq">FAQ</a></nav>
+  </div>
+</footer>
+
+<script>
+  // Demo chapters: buttons jump the film; the current chapter follows playback.
+  const CHAPTERS = [[0, 'Built for vibe coders'], [3.5, 'First run'], [12.72, 'Project analysis'], [22.65, 'Block town'], [44.02, 'Prompt it'],
+    [66.67, 'Test view'], [79.71, 'Prompt the fix'], [90.91, 'Ship it'], [102.77, 'Hologram mode'], [129.03, 'Download']];
+  const demo = document.getElementById('demo');
+  const list = document.getElementById('chapters');
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  CHAPTERS.forEach(([t, name], i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'chapter-' + i; b.setAttribute('role', 'listitem');
+    b.innerHTML = '<span class="t"></span><span class="n"></span>';
+    b.querySelector('.t').textContent = fmt(t);
+    b.querySelector('.n').textContent = name;
+    b.addEventListener('click', () => { demo.currentTime = t; demo.play().catch(() => {}); });
+    list.appendChild(b);
+  });
+  demo.addEventListener('timeupdate', () => {
+    let cur = 0;
+    CHAPTERS.forEach(([t], i) => { if (demo.currentTime >= t) cur = i; });
+    [...list.children].forEach((b, i) => b.setAttribute('aria-current', String(i === cur)));
+  });
+  // Feature loops play only while on screen, to save battery.
+  const loops = document.querySelectorAll('video[autoplay]');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause())), { threshold: 0.2 });
+    loops.forEach((v) => io.observe(v));
+  }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) loops.forEach((v) => { v.removeAttribute('autoplay'); v.pause(); v.controls = true; });
+</script>
+</body>
+</html>

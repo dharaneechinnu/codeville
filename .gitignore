@@ -16,3 +16,9 @@ src/renderer/public/mediapipe/
 
 # promo soundtrack (regenerate with promo/render/music.mjs)
 promo/audio/
+
+# copied from promo/ by the Pages workflow
+site/media/launch.mp4
+site/media/demo.mp4
+site/media/social.mp4
+site/media/poster-*.jpg

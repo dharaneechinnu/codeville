@@ -2,8 +2,9 @@
 
 [![Codeville launch video](promo/preview.gif)](promo/launch.mp4)
 
-**Built for vibe coders: your prompts, made visual.** Watch the [30-second launch video](promo/launch.mp4) or the [demo of the real app](promo/demo.mp4),
-or open the [launch page](promo/index.html). [Download for Windows](https://github.com/dharaneechinnu/codeville/releases).
+**Built for vibe coders: your prompts, made visual.** Watch the [30-second launch film](promo/launch.mp4), the
+[15-second social cut](promo/social.mp4) or the [narrated demo of the real app](promo/demo.mp4), or see the
+[launch site](https://dharaneechinnu.github.io/codeville/) (source in `site/`). [Download for Windows](https://github.com/dharaneechinnu/codeville/releases).
 
 A desktop workspace for vibe coding. It shows what your coding agent builds: a block town (one building per feature, one
 block per file), a walking shopper that runs your tests, and short messages that say what broke and what to do next.
@@ -142,9 +143,17 @@ Landmarker (Apache 2.0). The runtime and the model are bundled and run on this c
 `npm run test:gestures` checks the gesture rules with made-up hand points. If the camera is blocked, turn it on in Windows
 Settings, Privacy and security, Camera, for desktop apps. The window is now served from `app://codeville` instead of a file.
 
+## Launch site
+
+`site/` is the launch website: the launch film in a laptop, a feature tour with short loops cut from the real-app
+recording (`site/media/clip-*.mp4`), the narrated demo with chapters, install steps, a press kit and an FAQ. The
+`Launch site` workflow (`.github/workflows/pages.yml`) copies the films from `promo/` into `site/media/` and publishes
+it to GitHub Pages on every push to `main`. Turn it on once in Settings, Pages, Source: GitHub Actions. To preview
+locally, copy the films the same way and open `site/index.html`.
+
 ## Promo videos
 
-`promo/` holds the launch video (30 s), the demo (2:14), the launch page and the code that makes them. Both videos show
+`promo/` holds the launch film (30 s), a 15 s social cut, the narrated demo (2:14), the launch page and the code that makes them. Both videos show
 the **real app**: the React and three.js UI talking to the real Django backend, opening a real sample project, running
 its real tests and pushing to a real git remote, recorded in Chromium. Two inputs are scripted for the recording, and the
 videos say so on screen: the agent (`promo/capture/bin/claude` stands in for `claude -p`; it writes real files and sends
@@ -169,6 +178,12 @@ node render.mjs launch --out launch-frame.mp4 && python ../capture/mux.py <rec d
 ```
 
 Open `promo/render/frame.html?scene=launch` (or `real`) in a browser to preview the overlay layer in real time.
+
+The pro cuts (`launch.mp4`, `social.mp4`, `demo.mp4`) are built by `promo/render/pro.js` from the same recording:
+`python promo/capture/shots.py <rec dir> <shots dir>` extracts the shots listed in `pro_timeline.js`, then
+`node render.mjs pro-launch --shots <shots dir> --out ../launch.mp4` (and `pro-social`), and for the demo
+`node render.mjs pro-demo --out pro-demo-frame.mp4 && python ../capture/mux.py <rec dir> pro-demo-frame.mp4 ../demo.mp4 pro`.
+`node music_pro.mjs` writes their soundtracks; their voiceover lines are in `pro_voice.json`.
 
 ## Not done yet
 

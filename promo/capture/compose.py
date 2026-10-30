@@ -77,7 +77,7 @@ V = [
     (at["fix"] + 0.4, "So ask Claude to fix it. All eight tests pass."),
     (at["git"] + 0.4, "Then ship it. Stage, commit and push, in one click."),
     (at["holo"] + 0.4, "And the fun part. Turn on your camera, and your code becomes a hologram, like Tony Stark's lab."),
-    (at["holo"] + 10.6, "Spread two hands to zoom, make a fist to hold, and pinch twice to reset."),
+    (at["holo"] + 10.6, "Move your open hand to turn it. Spread two hands to zoom, make a fist to hold, and pinch twice to reset."),
     (ui_end + 0.4, "Codeville. Vibe code. See it build."),
 ]
 json.dump({"duration": total, "lines": V}, open(os.path.join(render, "real_voice.json"), "w"), indent=1)
