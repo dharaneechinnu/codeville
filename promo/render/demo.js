@@ -1,7 +1,7 @@
 // 90 second demo: a walk through every widget of the Codeville window.
 (function () {
   'use strict';
-  const { W, H, PAL, RAINBOW, prog, ease, lerp, hash, view, drawTown, wipe, text, tag, panel, button, check, cross, spinner,
+  const { W, H, PAL, RAINBOW, prog, ease, lerp, hash, view, drawTown, wipe, text, tag, panel, headline, button, check, cross, spinner,
     cursor, typed, darkBg, chat, route, shopperAt, testWorld, problemCard, holoBg, hand, endCard, shade, win } = CV;
 
   // ---------- the window ----------
@@ -362,28 +362,44 @@
     });
   }
 
-  // ---------- 80-86 hand control ----------
+  // ---------- 80-93 hand control: full-screen hologram lab ----------
+  // power on 80-81.6, palm rotate 81.6-86.8, two-hand zoom 86.8-88.6, fist hold 88.6-89.8, double pinch reset 89.8-91.2
   const GEST = [['OPEN PALM', 'ROTATE'], ['TWO HANDS', 'ZOOM'], ['FIST', 'HOLD'], ['DOUBLE PINCH', 'RESET']];
+  const HP = [81.6, 86.8, 88.6, 89.8, 91.2];
   function handScene(ctx, t) {
     holoBg(ctx, t);
-    const k = t - 80, phase = t < 81.7 ? 0 : t < 83.3 ? 1 : t < 84.6 ? 2 : 3;
-    const yawA = 0.8 + Math.sin(1.7 * 1.6) * 0.7;
-    let yaw = 0.8 + Math.sin(Math.min(k, 1.7) * 1.6) * 0.7, scale = 38 + 16 * ease.inOut(prog(t, 81.9, 83.1));
-    if (t > 84.9) { const e = ease.inOut(prog(t, 85.0, 85.6)); yaw = lerp(yawA, 0.8, e); scale = lerp(54, 38, e); }
-    const v = view({ scale, cx: CX + CW / 2, cy: CY + CH / 2 + 60, yaw, fx: 8, fy: 5 });
-    drawTown(ctx, v, town, 999, { holo: true, ground: GROUND });
-    const midX = CX + CW / 2, hy = CY + CH - 230;
-    if (phase === 0) hand(ctx, midX + Math.sin(Math.min(k, 1.7) * 1.6) * 360, hy, 16);
-    else if (phase === 1) { const sep = lerp(120, 420, ease.inOut(prog(t, 81.9, 83.1))); hand(ctx, midX - sep, hy, 16, { flip: true }); hand(ctx, midX + sep, hy, 16); }
-    else if (phase === 2) hand(ctx, midX + 200, hy, 16, { fist: true });
-    else { const pinch = (t > 84.8 && t < 84.95) || (t > 85.05 && t < 85.2); hand(ctx, midX + 200, hy, 16, { fist: pinch }); }
-    toolbar(ctx, t, { hand: true, links: 'HOLOGRAM' });
+    const power = prog(t, 80.1, 80.7), scanZ = t < 81.7 ? lerp(-0.5, 5.5, prog(t, 80.3, 81.7)) : null;
+    const phase = t < HP[0] ? -1 : t < HP[1] ? 0 : t < HP[2] ? 1 : t < HP[3] ? 2 : t < HP[4] ? 3 : 4;
+    const rot = (x) => 0.8 + Math.sin(Math.min(x, HP[1] - HP[0]) * 1.25) * 0.75;
+    const yawA = rot(99);
+    let yaw = t < HP[0] ? 0.8 + (t - 80) * 0.15 : rot(t - HP[0]), scale = 40 + 14 * ease.inOut(prog(t, HP[1] + 0.2, HP[2]));
+    if (t < HP[0]) yaw = lerp(0.8 + (t - 80) * 0.15, rot(0), prog(t, HP[0] - 0.4, HP[0]));
+    if (t > HP[3] + 0.4) { const e = ease.inOut(prog(t, HP[3] + 0.5, HP[4])); yaw = lerp(yawA, 0.8, e); scale = lerp(54, 40, e); }
+    if (t > HP[4]) yaw = 0.8 + (t - HP[4]) * 0.12;
+    const v = view({ scale, cx: W / 2 + 40, cy: 620, yaw, pitch: 0.6, fx: 8, fy: 5 });
+    CV.holoBase(ctx, v, t, 8, 5, power);
+    drawTown(ctx, v, town, 999, { holo: true, ground: GROUND, maxZ: scanZ, links: t > HP[0], labels: t > HP[0] });
+    CV.holoAir(ctx, v, t, 8, 5, power, scanZ);
+    CV.holoPanel(ctx, 70, 250, 330, t, 80.8, 'HOLO // SHOP-APP', [['FEATURES', 5], ['FILES', 96], ['LINKS', 12], ['TESTS', 24]], { bars: true });
+    CV.holoPanel(ctx, W - 400, 250, 330, t, 81.1, 'HAND TRACKING', [['HANDS', phase === 1 ? 2 : 1], ['LANDMARKS', phase === 1 ? 42 : 21], ['GESTURE', phase < 0 ? '...' : GEST[Math.min(phase, 3)][0].split(' ').pop()]]);
+    if (t > 81.1) CV.radar(ctx, W - 235, 640, 95, t, prog(t, 81.1, 81.6));
+    const midX = W / 2 + 40, hy = 840;
+    if (phase === 0) { const hx = midX + Math.sin(Math.min(t - HP[0], HP[1] - HP[0]) * 1.25) * 380; hand(ctx, hx, hy, 15); CV.handLock(ctx, hx, hy, t, 'HAND 1  99%'); }
+    else if (phase === 1) {
+      const sep = lerp(130, 430, ease.inOut(prog(t, HP[1] + 0.2, HP[2])));
+      hand(ctx, midX - sep, hy, 15, { flip: true }); hand(ctx, midX + sep, hy, 15);
+      CV.handLock(ctx, midX - sep, hy, t, 'HAND 1'); CV.handLock(ctx, midX + sep, hy, t, 'HAND 2');
+      ctx.setLineDash([10, 10]); ctx.beginPath(); ctx.moveTo(midX - sep + 90, hy); ctx.lineTo(midX + sep - 90, hy); ctx.strokeStyle = PAL.yellow; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    } else if (phase === 2) { hand(ctx, midX + 260, hy, 15, { fist: true }); CV.handLock(ctx, midX + 260, hy, t, 'HOLD'); }
+    else if (phase === 3) { const pinch = (t > HP[3] + 0.2 && t < HP[3] + 0.35) || (t > HP[3] + 0.45 && t < HP[3] + 0.6); hand(ctx, midX + 260, hy, 15, { fist: pinch }); CV.handLock(ctx, midX + 260, hy, t, pinch ? 'PINCH' : 'HAND 1'); }
     GEST.forEach(([g, d], i) => {
-      const x = CX + 40 + i * ((CW - 80) / 4), y = CY + CH - 84, w = (CW - 80) / 4 - 16, on = i === phase;
-      ctx.fillStyle = on ? PAL.cyan : 'rgba(13,17,36,0.9)'; ctx.fillRect(x, y, w, 60);
-      text(ctx, `${g} = ${d}`, x + w / 2, y + 31, { size: 14, fam: 'pixel', col: on ? '#05060d' : '#7E87BF', align: 'center', base: 'middle' });
+      const w = 380, x = W / 2 - 2 * (w + 16) + 8 + i * (w + 16), y = 990, on = i === phase;
+      ctx.fillStyle = on ? PAL.cyan : 'rgba(6,30,44,0.8)'; ctx.fillRect(x, y, w, 56);
+      if (!on) { ctx.strokeStyle = 'rgba(92,242,255,0.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, 56); }
+      text(ctx, `${g} = ${d}`, x + w / 2, y + 29, { size: 14, fam: 'pixel', col: on ? '#05060d' : '#9FDDE8', align: 'center', base: 'middle' });
     });
-    tag(ctx, 'THE CAMERA PICTURE STAYS ON THIS COMPUTER', CX + CW / 2, CY + 110, { size: 12, col: PAL.cyan, bg: 'rgba(6,16,26,0.85)' });
+    if (t > HP[4]) headline(ctx, [['Your', '#fff'], ['code,', '#fff'], ['as', '#fff'], ['a', '#fff'], ['hologram.', PAL.cyan]], t, HP[4] + 0.05, W / 2, 245, { size: 64 });
+    else tag(ctx, 'THE CAMERA PICTURE STAYS ON THIS COMPUTER', W / 2, 230, { size: 12, col: PAL.cyan, bg: 'rgba(6,16,26,0.85)' });
   }
 
   // ---------- timeline ----------
@@ -394,7 +410,7 @@
     [40, 55, '04', 'PROMPT IT, WATCH IT BUILD', 'Type a prompt. Every file the agent writes drops into the town, live.', 'CHAT', chatScene],
     [55, 70, '05', 'TEST VIEW', 'A shopper walks your tests, stops where it breaks, and you prompt the fix', 'TOWN', testScene],
     [70, 80, '06', 'SOURCE CONTROL', 'Ship what you prompted: stage, commit and push in one click', 'GIT', gitScene],
-    [80, 86, '07', 'HAND CONTROL', 'Turn on the camera. Rotate and zoom the hologram town by hand.', 'TOWN', handScene],
+    [80, 93, '07', 'HOLOGRAM MODE', 'Like a sci-fi lab: turn on the camera and steer the town with your hands', 'TOWN', handScene, true],
   ];
 
   const INTRO = 3.5;
@@ -404,26 +420,30 @@
     if (t < 0.45) { renderWalk(ctx, t); wipe(ctx, g, INTRO - 0.45, 0.9); return; }
     renderWalk(ctx, t);
   }
+  const END = 93;
   function renderWalk(ctx, t) {
-    if (t >= 86) { endCard(ctx, t, 86, town); wipe(ctx, t, 85.55, 0.9); return; }
+    if (t >= END) { endCard(ctx, t, END, town); wipe(ctx, t, END - 0.45, 0.9); return; }
     darkBg(ctx, t);
-    const i = SCENES.findIndex(([a, b]) => t >= a && t < b), [t0, t1, num, title, sub, nav, draw] = SCENES[i];
-    const pop = ease.outBack(prog(t, 0, 0.6));
-    ctx.save(); ctx.translate(W / 2, WY + WH / 2); ctx.scale(pop, pop); ctx.translate(-W / 2, -(WY + WH / 2));
-    windowFrame(ctx, nav);
-    ctx.save(); ctx.beginPath(); ctx.rect(CX, CY, CW, CH); ctx.clip();
-    if (draw !== gitScene && draw !== handScene && draw !== welcome && draw !== analysis) {
-      ctx.fillStyle = '#0E1A2A'; ctx.fillRect(CX, CY, CW, CH);
-    }
-    draw(ctx, t);
+    const i = SCENES.findIndex(([a, b]) => t >= a && t < b), [t0, t1, num, title, sub, nav, draw, full] = SCENES[i];
     const fade = 1 - win(t, t0, t1, 0.3, 0.3);
-    if (fade > 0 && !(t0 === 0 && t < 0.3)) { ctx.fillStyle = `rgba(6,16,26,${fade})`; ctx.fillRect(CX, CY, CW, CH); }
-    ctx.restore();
-    ctx.restore();
+    if (full) {
+      draw(ctx, t);
+      if (fade > 0) { ctx.fillStyle = `rgba(5,6,13,${fade})`; ctx.fillRect(0, 0, W, H); }
+    } else {
+      const pop = ease.outBack(prog(t, 0, 0.6));
+      ctx.save(); ctx.translate(W / 2, WY + WH / 2); ctx.scale(pop, pop); ctx.translate(-W / 2, -(WY + WH / 2));
+      windowFrame(ctx, nav);
+      ctx.save(); ctx.beginPath(); ctx.rect(CX, CY, CW, CH); ctx.clip();
+      if (draw !== gitScene && draw !== welcome && draw !== analysis) { ctx.fillStyle = '#0E1A2A'; ctx.fillRect(CX, CY, CW, CH); }
+      draw(ctx, t);
+      if (fade > 0 && !(t0 === 0 && t < 0.3)) { ctx.fillStyle = `rgba(6,16,26,${fade})`; ctx.fillRect(CX, CY, CW, CH); }
+      ctx.restore();
+      ctx.restore();
+    }
     caption(ctx, t, t0, t1, num, title, sub, RAINBOW[i % 4]);
-    wipe(ctx, t, 85.55, 0.9);
+    wipe(ctx, t, END - 0.45, 0.9);
   }
 
   CV.scenes = CV.scenes || {};
-  CV.scenes.demo = { duration: 90 + INTRO, render };
+  CV.scenes.demo = { duration: END + 4 + INTRO, render };
 })();

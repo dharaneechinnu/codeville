@@ -199,5 +199,100 @@
     ctx.restore();
   }
 
-  Object.assign(CV, { titleCard, promptPill, chat, problemCard, route, shopperAt, testWorld, holoBg, endCard });
+  // ---------- holo-lab dressing: projector rings, light columns, particles, scan plane, HUD panels ----------
+  const CY_ = PAL.cyan;
+  function ringPath(ctx, v, cx, cy, r, z = 0, a0 = 0, a1 = Math.PI * 2) {
+    ctx.beginPath();
+    for (let k = 0; k <= 72; k++) { const a = lerp(a0, a1, k / 72), p = v.p(cx + Math.cos(a) * r, cy + Math.sin(a) * r, z); k ? ctx.lineTo(...p) : ctx.moveTo(...p); }
+  }
+  function glowStroke(ctx, col, w, a) {
+    ctx.lineWidth = w * 4; ctx.strokeStyle = shade(col, 1, a * 0.15); ctx.stroke();
+    ctx.lineWidth = w; ctx.strokeStyle = shade(col, 1.2, a); ctx.stroke();
+  }
+  // Under the town: the projector. power 0..1 fades it in.
+  function holoBase(ctx, v, t, cx, cy, power = 1) {
+    if (power <= 0) return;
+    ringPath(ctx, v, cx, cy, 14.5); ctx.fillStyle = shade(CY_, 1, 0.05 * power); ctx.fill();
+    [[11.5, [18, 10], 30, 2], [13, [4, 6], -60, 3], [14.5, [60, 20, 6, 20], 20, 2.5], [15.4, [2, 14], -10, 2]].forEach(([r, dash, sp, w]) => {
+      ctx.setLineDash(dash); ctx.lineDashOffset = t * sp; ringPath(ctx, v, cx, cy, r); glowStroke(ctx, CY_, w, 0.8 * power);
+    });
+    ctx.setLineDash([]);
+    for (let k = 0; k < 72; k++) {
+      const a = k / 72 * Math.PI * 2 + t * 0.15, l = k % 6 ? 0.4 : 1.1;
+      const p1 = v.p(cx + Math.cos(a) * 16, cy + Math.sin(a) * 16, 0), p2 = v.p(cx + Math.cos(a) * (16 + l), cy + Math.sin(a) * (16 + l), 0);
+      ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.lineWidth = 2; ctx.strokeStyle = shade(CY_, 1, 0.6 * power); ctx.stroke();
+    }
+    // a bright arc sweeping around
+    ringPath(ctx, v, cx, cy, 15.4, 0, t * 1.2, t * 1.2 + 0.9); glowStroke(ctx, '#ffffff', 4, power);
+  }
+  // Over the town: light columns, rising particles, the scan plane.
+  function holoAir(ctx, v, t, cx, cy, power = 1, scanZ = null) {
+    if (power <= 0) return;
+    for (let k = 0; k < 44; k++) {
+      const a = k / 44 * Math.PI * 2, r = 15.4, h = 3 + hash(k) * 7 * (0.6 + 0.4 * Math.sin(t * 2 + k));
+      const p1 = v.p(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0), p2 = v.p(cx + Math.cos(a) * r, cy + Math.sin(a) * r, h);
+      const g = ctx.createLinearGradient(p1[0], p1[1], p2[0], p2[1]);
+      g.addColorStop(0, shade(CY_, 1, 0.35 * power)); g.addColorStop(1, shade(CY_, 1, 0));
+      ctx.strokeStyle = g; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke();
+    }
+    for (let k = 0; k < 90; k++) {
+      const a = hash(k) * Math.PI * 2, r = Math.sqrt(hash(k + 50)) * 14, z = ((t * (0.5 + hash(k + 9)) + hash(k + 3) * 9) % 9);
+      const p = v.p(cx + Math.cos(a) * r, cy + Math.sin(a) * r, z), s = 2 + hash(k + 7) * 3;
+      ctx.fillStyle = shade(k % 7 ? CY_ : '#ffffff', 1, (1 - z / 9) * 0.8 * power); ctx.fillRect(p[0] - s / 2, p[1] - s / 2, s, s);
+    }
+    if (scanZ != null) {
+      ringPath(ctx, v, cx, cy, 14.5, scanZ); ctx.fillStyle = shade(CY_, 1, 0.08); ctx.fill(); glowStroke(ctx, '#ffffff', 3, 0.9);
+      const p = v.p(cx + 14.5, cy, scanZ);
+      text(ctx, `SCAN ${Math.round(scanZ / 5 * 100)}%`, p[0] + 20, p[1], { size: 14, fam: 'pixel', col: CY_ });
+    }
+  }
+  function brackets(ctx, x, y, w, h, col, a = 1, l = 18) {
+    ctx.strokeStyle = shade(col, 1, a); ctx.lineWidth = 3; ctx.beginPath();
+    for (const [px, py, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+      ctx.moveTo(px + dx * l, py); ctx.lineTo(px, py); ctx.lineTo(px, py + dy * l);
+    }
+    ctx.stroke();
+  }
+  // A floating HUD panel that flickers on at t0. rows: [[label, value]]
+  function holoPanel(ctx, x, y, w, t, t0, title, rows, o = {}) {
+    if (t < t0) return;
+    const on = prog(t, t0, t0 + 0.5), flick = on < 1 ? (Math.floor(t * 40) % 3 ? 1 : 0.3) : 1, a = on * flick;
+    const h = 64 + rows.length * 42 + (o.bars ? 70 : 0);
+    ctx.fillStyle = `rgba(6,30,44,${0.55 * a})`; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = shade(CY_, 1, 0.35 * a); ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+    brackets(ctx, x - 6, y - 6, w + 12, h + 12, CY_, a);
+    text(ctx, title, x + 18, y + 34, { size: 14, fam: 'pixel', col: CY_, alpha: a });
+    ctx.fillStyle = shade(CY_, 1, 0.5 * a); ctx.fillRect(x + 18, y + 46, (w - 36) * on, 2);
+    rows.forEach(([k, val], i) => {
+      text(ctx, k, x + 18, y + 90 + i * 42, { size: 20, fam: 'silk', col: '#9FDDE8', alpha: a });
+      const shown = typeof val === 'number' ? String(Math.round(val * ease.outCubic(prog(t, t0 + 0.2 + i * 0.1, t0 + 1.2 + i * 0.1)))).padStart(2, '0') : val;
+      text(ctx, shown, x + w - 18, y + 90 + i * 42, { size: 22, fam: 'pixel', col: '#ffffff', align: 'right', alpha: a });
+    });
+    if (o.bars) {
+      for (let k = 0; k < 14; k++) {
+        const bh = 10 + 46 * Math.abs(Math.sin(t * 2.2 + k * 0.7)) * hash(k + 4);
+        ctx.fillStyle = shade(k % 5 ? CY_ : PAL.yellow, 1, 0.75 * a); ctx.fillRect(x + 18 + k * ((w - 36) / 14), y + h - 14 - bh, (w - 36) / 14 - 5, bh);
+      }
+    }
+  }
+  function radar(ctx, x, y, r, t, a = 1) {
+    ctx.globalAlpha = a;
+    for (const k of [1, 0.66, 0.33]) { ctx.beginPath(); ctx.arc(x, y, r * k, 0, Math.PI * 2); ctx.strokeStyle = shade(CY_, 1, 0.4); ctx.lineWidth = 1.5; ctx.stroke(); }
+    const s = t * 2.4;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r, s - 0.6, s); ctx.closePath(); ctx.fillStyle = shade(CY_, 1, 0.25); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(s) * r, y + Math.sin(s) * r); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    for (let k = 0; k < 6; k++) { const aa = hash(k) * 6.28, rr = r * (0.2 + hash(k + 1) * 0.75); ctx.fillStyle = PAL.yellow; ctx.fillRect(x + Math.cos(aa) * rr - 3, y + Math.sin(aa) * rr - 3, 6, 6); }
+    ctx.globalAlpha = 1;
+  }
+  // Tracking box around a hand, as the hand tracker would show it.
+  function handLock(ctx, x, y, t, label) {
+    const s = 170 + Math.sin(t * 6) * 6;
+    brackets(ctx, x - s / 2, y - s / 2 - 10, s, s, PAL.yellow, 0.95, 26);
+    ctx.save(); ctx.translate(x, y - 10); ctx.rotate(t * 1.5);
+    ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.arc(0, 0, s * 0.62, 0, Math.PI * 2); ctx.strokeStyle = shade(PAL.yellow, 1, 0.5); ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+    text(ctx, label, x - s / 2, y - s / 2 - 22, { size: 12, fam: 'pixel', col: PAL.yellow });
+  }
+
+  Object.assign(CV, { holoBase, holoAir, holoPanel, radar, handLock, brackets, titleCard, promptPill, chat, problemCard, route, shopperAt, testWorld, holoBg, endCard });
 })();

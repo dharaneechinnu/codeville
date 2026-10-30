@@ -189,7 +189,7 @@
   function townItems(town, t, o = {}) {
     const items = [];
     for (const bl of town.blocks) {
-      if (t < bl.born) continue;
+      if (t < bl.born || (o.maxZ != null && bl.z > o.maxZ)) continue;
       const a = prog(t, bl.born, bl.born + 0.55);
       const zOff = (1 - ease.outBounce(a)) * 7;
       const isFail = o.fail === bl.id;
@@ -201,7 +201,7 @@
       items.push({ x: bl.x + 0.03, y: bl.y + 0.03, z: bl.z + zOff, w: 0.94, d: 0.94, h: 0.94, col, o: { seed: bl.id, glow, bright, holo: o.holo, alpha, holoCol: isFail ? PAL.red : undefined } });
     }
     for (const tr of town.trees) {
-      if (t < tr.born) continue;
+      if (t < tr.born || (o.maxZ != null && o.maxZ < 2.5)) continue;
       items.push(...treeItems(tr, ease.outBack(prog(t, tr.born, tr.born + 0.5)), o));
     }
     if (o.extra) items.push(...o.extra);

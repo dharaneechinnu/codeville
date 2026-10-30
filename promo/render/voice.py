@@ -28,8 +28,9 @@ LINES = [
     (66.6, "It stops right where it breaks, and tells you what to fix next."),
     (70.6, "One click, and Claude is on it."),
     (74.0, "Then ship it. Stage, commit and push, in one click."),
-    (84.0, "Turn on your camera, and steer the town with your hands."),
-    (89.9, "Codeville. Vibe code. See it build."),
+    (83.8, "And now, the fun part. Turn on your camera, and your code becomes a hologram, like Tony Stark's lab."),
+    (90.6, "Spread two hands to zoom, make a fist to hold, and pinch twice to reset."),
+    (97.0, "Codeville. Vibe code. See it build."),
 ]
 
 ap = argparse.ArgumentParser()
@@ -37,7 +38,7 @@ ap.add_argument("--model", default="kokoro-v1.0.onnx")
 ap.add_argument("--voices", default="voices-v1.0.bin")
 ap.add_argument("--voice", default="am_michael")
 ap.add_argument("--speed", type=float, default=1.05)
-ap.add_argument("--duration", type=float, default=93.5)
+ap.add_argument("--duration", type=float, default=100.5)
 ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "audio", "demo-voice.wav"))
 args = ap.parse_args()
 

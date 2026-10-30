@@ -108,21 +108,22 @@ function save(T, name, fadeOut = 1.2) {
 
 // ---------- demo: 3.5 s title + 90 s at 100 bpm, quieter bed under the walkthrough ----------
 {
-  const OFF = 3.5, T0 = track(90 + OFF), T = { ...T0, add: (t, ...a) => T0.add(t + OFF, ...a), dur: 90 };
+  const OFF = 3.5, T0 = track(97 + OFF), T = { ...T0, add: (t, ...a) => T0.add(t + OFF, ...a), dur: 97 };
   music({ ...T0, dur: OFF }, 100, () => ({ arp: 0.08, hat: 0.05, kick: 0.4 }));
   inst.pop(T0, 0.15, 0.15, 520); inst.pop(T0, 0.4, 0.15, 780); inst.whoosh(T0, OFF - 0.45, 0.25);
   for (let i = 0; i < 25; i++) inst.click(T0, 0.95 + i / 26, 0.08);
   music(T, 100, (t) => {
-    if (t >= 86) return { arp: 0.08, bass: 0.22, hat: 0.06, kick: 0.45, snare: 0.18, lead: 0.07 };
-    if (t >= 80) return { pad: 0.1, arp: 0.05, hat: 0.04 };
+    if (t >= 93) return { arp: 0.08, bass: 0.22, hat: 0.06, kick: 0.45, snare: 0.18, lead: 0.07 };
+    if (t >= 80) return { pad: 0.11, arp: 0.05, hat: 0.04, kick: t > 81.6 ? 0.25 : 0 };
     return { arp: 0.06, bass: 0.18, hat: 0.045, kick: t > 10 ? 0.3 : 0, snare: t > 25 ? 0.1 : 0 };
   });
-  for (const w of [9.7, 24.7, 39.7, 54.7, 69.7, 79.7, 85.55]) inst.whoosh(T, w, 0.22);
+  for (const w of [9.7, 24.7, 39.7, 54.7, 69.7, 79.7, 92.55]) inst.whoosh(T, w, 0.22);
+  inst.whoosh(T, 80.3, 0.3); inst.ding(T, 81.7, 0.12); for (let i = 0; i < 12; i++) inst.click(T, 80.4 + i * 0.11, 0.05);
   for (const d of [1.3, 2.1, 2.9]) inst.ding(T, d, 0.1);
   for (let i = 0; i < 9; i++) inst.pop(T, 11.2 + i * 1.25, 0.1, 800);
   for (const c of [6.0, 7.4, 31.4, 35.8, 42.9, 56.2, 66.9, 75.9]) inst.click(T, c, 0.2);
   for (let i = 0; i < 20; i++) inst.pop(T, 25.3 + i * 0.11, 0.08, 500 + rnd() * 400);
   for (const [s, n] of [[45.8, 5], [46.9, 4], [49.1, 2]]) for (let k = 0; k < n; k++) inst.pop(T, s + k * 0.13 + 0.15, 0.1, 700 + k * 40);
-  inst.ding(T, 51.2, 0.1); inst.fail(T, 56.9 + 12 / 1.95, 0.16); inst.ding(T, 77.5, 0.12); inst.hit(T, 86.0, 0.45);
+  inst.ding(T, 51.2, 0.1); inst.fail(T, 56.9 + 12 / 1.95, 0.16); inst.ding(T, 77.5, 0.12); inst.hit(T, 93.0, 0.45);
   save(T0, 'demo', 2);
 }

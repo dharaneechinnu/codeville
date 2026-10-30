@@ -144,7 +144,7 @@ Settings, Privacy and security, Camera, for desktop apps. The window is now serv
 
 ## Promo videos
 
-`promo/` holds the launch video (30 s), the demo (93 s), the launch page and the code that makes them. Everything is
+`promo/` holds the launch video (30 s), the demo (100 s), the launch page and the code that makes them. Everything is
 drawn on a canvas in `promo/render` (voxel town, pixel UI, kinetic text) and the soundtrack is synthesized, so there
 are no outside assets apart from three Google Fonts (OFL) in `promo/render/fonts`. The demo's voiceover is spoken by
 [Kokoro-82M](https://github.com/thewh1teagle/kokoro-onnx), an open-source (Apache 2.0) text-to-speech model that runs on
