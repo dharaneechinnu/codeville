@@ -40,9 +40,15 @@ if (opt('--still')) {
 
 const duration = await (await page()).evaluate((n) => CV.scenes[n].duration, name);
 const total = Math.round(duration * fps);
-const audio = path.join(here, '..', 'audio', `${name}.wav`);
+const audio = path.join(here, '..', 'audio', `${name}.wav`), voice = path.join(here, '..', 'audio', `${name}-voice.wav`);
+// With a voiceover (voice.py), the music ducks under the voice.
+const mix = existsSync(voice)
+  ? ['-i', audio, '-i', voice, '-filter_complex', '[2:a]aresample=44100,pan=stereo|c0=c0|c1=c0,asplit=2[v][sc];' +
+    '[1:a][sc]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=450[m];[m][v]amix=inputs=2:normalize=0:weights=0.7 1.0,alimiter=limit=0.95[a]',
+  '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '192k', '-shortest']
+  : existsSync(audio) ? ['-i', audio, '-c:a', 'aac', '-b:a', '192k', '-shortest'] : [];
 const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
-  ...(existsSync(audio) ? ['-i', audio, '-c:a', 'aac', '-b:a', '192k', '-shortest'] : []),
+  ...mix,
   '-c:v', 'libx264', '-preset', 'slow', '-crf', opt('--crf', '24'), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });
 
 const done = new Map();

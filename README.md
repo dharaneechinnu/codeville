@@ -146,11 +146,15 @@ Settings, Privacy and security, Camera, for desktop apps. The window is now serv
 
 `promo/` holds the launch video (30 s), the demo (93 s), the launch page and the code that makes them. Everything is
 drawn on a canvas in `promo/render` (voxel town, pixel UI, kinetic text) and the soundtrack is synthesized, so there
-are no outside assets apart from three Google Fonts (OFL) in `promo/render/fonts`. To change and re-render:
+are no outside assets apart from three Google Fonts (OFL) in `promo/render/fonts`. The demo's voiceover is spoken by
+[Kokoro-82M](https://github.com/thewh1teagle/kokoro-onnx), an open-source (Apache 2.0) text-to-speech model that runs on
+the CPU (`pip install kokoro-onnx soundfile`, model files from its `model-files-v1.0` release); the lines and their times
+are at the top of `voice.py`, and the music ducks under the voice. To change and re-render:
 
 ```
 cd promo/render
 node music.mjs                 # audio/launch.wav, audio/demo.wav
+python voice.py --model kokoro-v1.0.onnx --voices voices-v1.0.bin   # audio/demo-voice.wav
 node render.mjs launch         # ../launch.mp4 (Playwright Chromium + ffmpeg)
 node render.mjs demo
 node render.mjs demo --still 31.5   # one frame, to check a change
