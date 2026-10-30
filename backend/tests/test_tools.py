@@ -13,7 +13,7 @@ FAILING_TEST = (
 def shop(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "pay.test.js").write_text(FAILING_TEST)
-    (tmp_path / "package.json").write_text(json.dumps({"name": "shop", "scripts": {"test": "node --test tests"}}))
+    (tmp_path / "package.json").write_text(json.dumps({"name": "shop", "scripts": {"test": "node --test"}}))
     for rel in ["frontend/CartPage.tsx", "frontend/CartItem.tsx", "backend/payments/charge.js", "backend/auth/login.js"]:
         f = tmp_path / rel
         f.parent.mkdir(parents=True, exist_ok=True)

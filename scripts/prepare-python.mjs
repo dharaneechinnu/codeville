@@ -24,7 +24,7 @@ if (!existsSync(join(out, 'python.exe'))) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Could not download Python: ${res.status}`);
   writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
-  execFileSync(join(process.env.SystemRoot ?? 'C:\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', out], { stdio: 'inherit' });
+  execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', out], { stdio: 'inherit' });
 }
 
 // The embeddable build ignores site-packages until its ._pth file lists it.

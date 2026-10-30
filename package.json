@@ -15,7 +15,7 @@
     "build:ui": "npm run prepare:gestures && vite build",
     "build": "npm run build:main && npm run build:ui",
     "start": "npm run build && electron .",
-    "dist": "npm run build && npm run prepare:python && electron-builder --win",
+    "dist": "npm run build && npm run prepare:python && electron-builder --win --publish never",
     "prepare:python": "node scripts/prepare-python.mjs",
     "dist:dir": "npm run build && npm run prepare:python && electron-builder --win --dir",
     "prepare:gestures": "node scripts/prepare-gestures.mjs",
@@ -43,7 +43,8 @@
     "appId": "com.codevisualizer.app",
     "productName": "Codeville",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "resources"
     },
     "files": [
       "dist/**",
@@ -85,14 +86,24 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "resources/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "artifactName": "Codeville-Setup-${version}.exe"
+      "artifactName": "Codeville-Setup-${version}.exe",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Codeville",
+      "uninstallDisplayName": "Codeville",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dharaneechinnu/codeville.git"
   }
 }

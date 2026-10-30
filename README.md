@@ -61,7 +61,25 @@ npm run dist:dir   # unpacked app only, faster for testing: release\win-unpacked
 
 The first run downloads the official Python 3.12 "embeddable" zip from python.org into `build/python` and installs the
 backend packages from `backend/requirements-runtime.txt`. The installer then needs no Python on the user's computer. It
-also bundles the Claude Code plugin. It is not code signed, so Windows SmartScreen will warn. The app has no custom icon yet.
+also bundles the Claude Code plugin. The app icon is `resources/icon.png`. The installer is not code signed yet, so
+Windows SmartScreen will warn (More info, then Run anyway).
+
+## Release
+
+Releases are built on GitHub, on a Windows runner, by `.github/workflows/release.yml`:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The workflow sets the app version from the tag, runs the backend tests, the type check and the gesture tests, builds the
+installer, and publishes a GitHub Release with `Codeville-Setup-<version>.exe`, `Codeville-Setup.exe` and
+`SHA256SUMS.txt`. The fixed name keeps this link on the newest release, which the launch site's Download buttons use:
+https://github.com/dharaneechinnu/codeville/releases/latest/download/Codeville-Setup.exe
+
+To build the installer without releasing, run the Release workflow by hand from the Actions tab; the installer is kept
+with the run for 14 days.
 
 ## Project analysis agent
 
