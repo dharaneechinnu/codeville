@@ -325,19 +325,20 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .tools, .filecard, .connwrap { z-index: 3; }
 .tools button.on { border-color: var(--accent); color: #5cf2ff; box-shadow: 0 0 10px rgba(25,230,255,.55); }
 .stage.holo { background: radial-gradient(ellipse at 50% 60%, #06232e 0%, #02070d 75%); }
-.holo-back { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
-.holo-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: .5;
-  filter: grayscale(1) sepia(1) hue-rotate(150deg) saturate(3) brightness(.7) contrast(1.15); }
 .holo-front { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.holo-scan { position: absolute; inset: 0; mix-blend-mode: screen; opacity: .5;
-  background: repeating-linear-gradient(0deg, rgba(25,230,255,.07) 0, rgba(25,230,255,.07) 1px, transparent 1px, transparent 3px);
+.holo-scan { position: absolute; inset: 0; mix-blend-mode: screen; opacity: .35;
+  background: repeating-linear-gradient(0deg, rgba(25,230,255,.06) 0, rgba(25,230,255,.06) 1px, transparent 1px, transparent 4px);
   animation: holo-flicker 4s steps(2, end) infinite; }
 .holo-hands { position: absolute; inset: 0; width: 100%; height: 100%; }
-.holo-hud { position: absolute; right: 8px; bottom: 12px; max-width: 300px; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font: 700 12px var(--mono); color: #5cf2ff; background: rgba(2,12,18,.78); border: 1px solid rgba(92,242,255,.6); padding: 5px 12px; text-shadow: 0 0 8px rgba(25,230,255,.7); pointer-events: auto; text-align: center; }
-.holo-hud em { font-style: normal; color: #d8fcff; margin-left: 6px; text-transform: uppercase; }
-.holo-hud small { font: 11px var(--mono); color: #7bbcc6; }
-.holo-hud .bad { color: #ff9aa6; text-shadow: none; }
+.holo-hud { position: absolute; right: 10px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+  font: 700 11px var(--mono); color: #5cf2ff; background: rgba(2,12,18,.82); border: 1px solid rgba(92,242,255,.45); border-radius: 8px;
+  backdrop-filter: blur(6px); pointer-events: auto; }
+.holo-hud ul { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.holo-hud li { padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(92,242,255,.25); color: #7bbcc6; font-weight: 500; }
+.holo-hud li em { font-style: normal; color: #d8fcff; }
+.holo-hud li.on { background: #5cf2ff; border-color: #5cf2ff; color: #02070d; }
+.holo-hud li.on em { color: #02070d; }
+.holo-hud .bad { color: #ff9aa6; }
 .holo-hud button { margin-left: 8px; font: 700 11px var(--mono); }
 @keyframes holo-flicker { 0% { opacity: .5; } 50% { opacity: .38; } 100% { opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { .holo-scan { animation: none; } }

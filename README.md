@@ -147,7 +147,9 @@ line if any, and what to do next.
 ## Hand control (hologram)
 
 The hand icon in the Build view's toolbar turns on the camera and switches the town to a hologram look: see-through
-buildings with glowing outlines over a faint picture of the camera. Hands are tracked by Google's MediaPipe Hand
+buildings with glowing outlines, and a live tracker drawn over them (`src/renderer/handview.ts`): the hand's skeleton,
+fingertip rings, a palm reticle and a mark for the gesture it recognises. Only the hand is drawn; the camera picture is
+never shown. Hands are tracked by Google's MediaPipe Hand
 Landmarker (Apache 2.0). The runtime and the model are bundled and run on this computer, so no camera picture leaves it.
 
 | Gesture | What it does |

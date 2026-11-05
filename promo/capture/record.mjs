@@ -1,6 +1,6 @@
 // Records the real Codeville UI for the demo: it drives the app in Chromium (typing, clicks, the agent, tests, git,
 // hand control) and saves every painted frame with its time, plus marks where each scene starts.
-//   node record.mjs <out dir> <project path>
+//   node record.mjs <out dir> <project path>        (ONLY=holo node record.mjs ... for just hand control)
 // Needs: the backend running with bin/ (the scripted `claude`) on its PATH, the UI on http://localhost:5180,
 // and <out dir>/camera.y4m (the picture the fake camera shows in hand control).
 import { createRequire } from 'node:module';
@@ -72,6 +72,9 @@ await wait(0.4);
 await click(p.getByRole('button', { name: 'Open', exact: true }), 0.6);
 await wait(3.5);
 
+// ONLY=holo records just the hand control scene (after opening the project).
+if (process.env.ONLY === 'holo') { await click('button.abh', 0.6); await wait(0.6); }
+if (process.env.ONLY !== 'holo') {
 mark('analysis');
 await click(p.getByText('How this was analyzed'), 0.9);
 await wait(1.5);
@@ -128,6 +131,7 @@ await click(byTitle('Stage all'), 0.7);
 await wait(1.2);
 await click(byTitle('Commit and push'), 0.7);
 await wait(4.5);
+}
 
 mark('holo');
 await click(p.locator('button', { hasText: /^Build$/ }).first(), 0.9);

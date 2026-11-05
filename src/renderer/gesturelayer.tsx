@@ -1,30 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { GestureInterpreter, HandTracker, type GestureMode, type Hand } from './gesture.js';
+import { HandView } from './handview.js';
 import type { Town } from './town.js';
 
-/** Finger bones of one hand, as pairs of landmark numbers. */
-const BONES = [
-  [0, 1], [1, 2], [2, 3], [3, 4],
-  [0, 5], [5, 6], [6, 7], [7, 8],
-  [5, 9], [9, 10], [10, 11], [11, 12],
-  [9, 13], [13, 14], [14, 15], [15, 16],
-  [13, 17], [17, 18], [18, 19], [19, 20], [0, 17],
+const STEPS: [GestureMode, string, string][] = [
+  ['rotate', 'Open hand', 'turn'],
+  ['zoom', 'Two hands', 'zoom'],
+  ['hold', 'Fist', 'hold'],
+  ['reset', 'Double pinch', 'reset'],
 ];
 
-const LABEL: Record<GestureMode, string> = {
-  idle: 'show your hand',
-  rotate: 'moving the town',
-  zoom: 'zooming',
-  hold: 'holding still',
-  reset: 'view reset',
-};
-
 /**
- * Hand control with a hologram look: the camera picture shows faintly behind the see-through town, and the hand
- * skeleton is drawn on top. Open palm moves the town, two open hands zoom, a fist holds, a double pinch resets.
+ * Hand control with a hologram look: the town turns see-through and the tracked hands are drawn over it. The camera
+ * only feeds the hand tracker; its picture is never shown. Open hand turns the town, two open hands zoom, a fist
+ * holds, a double pinch resets.
  */
 export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null; onClose: () => void }): JSX.Element {
-  const back = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState<'starting' | 'on' | 'error'>('starting');
   const [error, setError] = useState('');
@@ -35,6 +26,7 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
     town?.setHologram(true);
     const interp = new GestureInterpreter();
     let shown: GestureMode = 'idle';
+    const view = new HandView();
     const tracker = new HandTracker({
       onError: (m) => {
         setError(m);
@@ -53,53 +45,35 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
           shown = f.mode;
           setMode(f.mode);
         }
-        draw(hands);
+        view.update(hands, f, now, toScreen);
       },
     });
+    // The camera element stays in the page so the browser keeps decoding it, but it is invisible: it only feeds the tracker.
     const video = tracker.video;
-    video.className = 'holo-video';
-    back.current?.appendChild(video);
+    video.setAttribute('aria-hidden', 'true');
+    video.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+    document.body.appendChild(video);
 
-    function draw(hands: Hand[]): void {
-      const c = overlay.current;
-      if (!c) return;
-      const w = c.clientWidth;
-      const h = c.clientHeight;
-      if (c.width !== w || c.height !== h) {
-        c.width = w;
-        c.height = h;
-      }
-      const g = c.getContext('2d');
-      if (!g) return;
-      g.clearRect(0, 0, w, h);
-      const vw = video.videoWidth || 640;
-      const vh = video.videoHeight || 480;
-      const k = Math.max(w / vw, h / vh); // the picture fills the stage, so the points follow the same crop
-      const ox = (w - vw * k) / 2;
-      const oy = (h - vh * k) / 2;
-      const at = (p: { x: number; y: number }): [number, number] => [ox + (1 - p.x) * vw * k, oy + p.y * vh * k];
-      g.lineWidth = 2;
-      g.strokeStyle = 'rgba(92,242,255,.95)';
-      g.fillStyle = '#d8fcff';
-      g.shadowColor = '#19e6ff';
-      g.shadowBlur = 10;
-      for (const hand of hands) {
-        g.beginPath();
-        for (const [a, b] of BONES) {
-          const [x1, y1] = at(hand[a!]!);
-          const [x2, y2] = at(hand[b!]!);
-          g.moveTo(x1, y1);
-          g.lineTo(x2, y2);
-        }
-        g.stroke();
-        for (const p of hand) {
-          const [x, y] = at(p);
-          g.beginPath();
-          g.arc(x, y, 3, 0, Math.PI * 2);
-          g.fill();
-        }
-      }
+    // Landmarks are in camera-image space; the stage shows that space mirrored and cropped to fill it.
+    function toScreen(p: { x: number; y: number }): { x: number; y: number } {
+      const c = overlay.current, dpr = window.devicePixelRatio || 1;
+      const w = (c?.clientWidth ?? 0) * dpr, h = (c?.clientHeight ?? 0) * dpr;
+      const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+      const k = Math.max(w / vw, h / vh);
+      return { x: (w - vw * k) / 2 + (1 - p.x) * vw * k, y: (h - vh * k) / 2 + p.y * vh * k };
     }
+
+    let raf = 0;
+    const frame = (): void => {
+      raf = requestAnimationFrame(frame);
+      const c = overlay.current;
+      const g = c?.getContext('2d');
+      if (!c || !g) return;
+      const dpr = window.devicePixelRatio || 1, w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+      view.draw(g, dpr, performance.now());
+    };
+    frame();
 
     tracker
       .start()
@@ -111,6 +85,7 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
 
     return () => {
       tracker.stop();
+      cancelAnimationFrame(raf);
       video.remove();
       getTown()?.setHologram(false);
     };
@@ -119,26 +94,27 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
   }, []);
 
   return (
-    <>
-      <div className="holo-back" ref={back} />
-      <div className="holo-front">
-        <div className="holo-scan" />
-        <canvas className="holo-hands" ref={overlay} />
-        <div className="holo-hud" role="status">
-          {state === 'starting' && <span>Starting the camera and hand tracking...</span>}
-          {state === 'error' && (
-            <span className="bad">
-              {error} <button onClick={onClose}>Close</button>
-            </span>
-          )}
-          {state === 'on' && (
-            <>
-              <b>HAND CONTROL</b> <em className={mode}>{LABEL[mode]}</em>
-              <small>open hand: move the town · two open hands: zoom · fist: hold · double pinch: reset</small>
-            </>
-          )}
-        </div>
+    <div className="holo-front">
+      <div className="holo-scan" />
+      <canvas className="holo-hands" ref={overlay} />
+      <div className="holo-hud" role="status">
+        {state === 'starting' && <span>Starting hand tracking...</span>}
+        {state === 'error' && (
+          <span className="bad">
+            {error} <button onClick={onClose}>Close</button>
+          </span>
+        )}
+        {state === 'on' && (
+          <>
+            <b>HAND CONTROL{mode === 'idle' ? ' · show your hand' : ''}</b>
+            <ul>
+              {STEPS.map(([m, hand, does]) => (
+                <li key={m} className={mode === m ? 'on' : ''}>{hand} <em>{does}</em></li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
-    </>
+    </div>
   );
 }

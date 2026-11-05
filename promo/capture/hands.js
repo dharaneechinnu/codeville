@@ -19,12 +19,12 @@
     const g = window.__cvGesture;
     if (!g) return [];
     const k = (performance.now() - g.t0) / 1000;
-    if (g.mode === 'rotate') return [hand(OPEN, 0.5 + 0.2 * Math.sin(k * 1.3), 0.62 + 0.035 * Math.sin(k * 2.1), 0.13)];
-    if (g.mode === 'zoom') { const gap = 0.12 + Math.min(1, k / 2.4) * 0.2; return [hand(OPEN, 0.5 - gap, 0.62, 0.12, true), hand(OPEN, 0.5 + gap, 0.62, 0.12)]; }
-    if (g.mode === 'hold') return [hand(FIST, 0.5 + 0.06 * Math.sin(k * 3), 0.62, 0.13)];
+    if (g.mode === 'rotate') return [hand(OPEN, 0.5 + 0.2 * Math.sin(k * 1.3), 0.5 + 0.03 * Math.sin(k * 2.1), 0.085)];
+    if (g.mode === 'zoom') { const gap = 0.12 + Math.min(1, k / 2.4) * 0.2; return [hand(OPEN, 0.5 - gap, 0.5, 0.08, true), hand(OPEN, 0.5 + gap, 0.5, 0.08)]; }
+    if (g.mode === 'hold') return [hand(FIST, 0.5 + 0.06 * Math.sin(k * 3), 0.5, 0.085)];
     if (g.mode === 'reset') {
       const ms = k * 1000, pinch = (ms > 300 && ms < 480) || (ms > 650 && ms < 830);
-      return [hand(pinch ? PINCH : OPEN, 0.55, 0.62, 0.13)];
+      return [hand(pinch ? PINCH : OPEN, 0.55, 0.5, 0.085)];
     }
     return [];
   };
