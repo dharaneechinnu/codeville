@@ -163,11 +163,11 @@ Settings, Privacy and security, Camera, for desktop apps. The window is now serv
 
 ## Launch site
 
-`site/` is the launch website: the launch film in a laptop, a feature tour with short loops cut from the real-app
-recording (`site/media/clip-*.mp4`), the narrated demo with chapters, install steps, a press kit and an FAQ. The
-`Launch site` workflow (`.github/workflows/pages.yml`) copies the films from `promo/` into `site/media/` and publishes
-it to GitHub Pages on every push to `main`. Turn it on once in Settings, Pages, Source: GitHub Actions. To preview
-locally, copy the films the same way and open `site/index.html`.
+`site/` is the launch website: what Codeville does, a screenshot of the real app with its parts labelled, one section
+per feature with a short silent loop cut from the real-app recording (`site/media/clip-*.mp4`), install steps,
+requirements and an FAQ. The `Launch site` workflow (`.github/workflows/pages.yml`) publishes it to GitHub Pages on
+every push to `main` that changes `site/`. Open `site/index.html` to preview it locally. The films in `promo/` are for
+social posts and talks and are not on the site.
 
 ## Promo videos
 
