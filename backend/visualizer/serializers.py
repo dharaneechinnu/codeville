@@ -45,6 +45,25 @@ class FileSerializer(FolderSerializer):
     file = serializers.CharField(error_messages={"required": "Send the file to open", "blank": "Send the file to open"})
 
 
+class FileWriteSerializer(FileSerializer):
+    content = serializers.CharField(allow_blank=True, trim_whitespace=False, max_length=2_000_000)
+    base = serializers.CharField(allow_blank=True, trim_whitespace=False, max_length=2_000_000)
+
+
+class AIEditSerializer(FileSerializer):
+    instruction = serializers.CharField(max_length=4000, error_messages={"required": "Type what to change", "blank": "Type what to change"})
+    provider = serializers.CharField(required=False, allow_blank=True, max_length=40)
+
+
+class AISettingsSerializer(serializers.Serializer):
+    provider = serializers.CharField(max_length=40)
+    apiKey = serializers.CharField(required=False, allow_blank=True, max_length=400, trim_whitespace=True)
+    model = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    baseUrl = serializers.CharField(required=False, allow_blank=True, max_length=400)
+    clearKey = serializers.BooleanField(required=False, default=False)
+    makeActive = serializers.BooleanField(required=False, default=False)
+
+
 class StageSerializer(FolderSerializer):
     files = serializers.ListField(child=serializers.CharField(), allow_empty=False, error_messages={"required": "Pick the files", "empty": "Pick the files"})
     stage = serializers.BooleanField(default=True)

@@ -47,7 +47,7 @@ npm install
 npm start          # builds, then opens the window; the window starts the backend for you
 ```
 
-Tests: `npm test` (68 Python tests). Type check: `npm run typecheck`.
+Tests: `npm test` (80 Python tests). Type check: `npm run typecheck`.
 
 For UI work: `npm run backend` in one terminal, `npm run dev:ui` in another, then open
 `http://localhost:5180/#base=http://127.0.0.1:<port>&token=<token>` (port and token are in `~/.code-visualizer/config.json`).
@@ -135,6 +135,8 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `GET /stream` | Server-sent events: agent, test, build and git events plus terminal output. |
 | `POST /hook/claude-code` | Where the plugin sends hook events. |
 | `POST /api/analyze`, `/api/file` | Read a project into features and files; read one file. |
+| `POST /api/file/write` | Save an accepted AI edit (refused if the file changed since). |
+| `GET`/`POST /api/ai/settings`, `POST /api/ai/test`, `/api/ai/edit` | AI providers and keys (keys are write-only), a test call, and a proposed edit of one file. |
 | `POST /api/run`, `/api/stop` | Run or stop a command. |
 | `POST /api/git/changes`, `/stage`, `/commit`, `/push` | Source control. |
 | `POST /api/agent/send` | Send a prompt to Claude Code. |
@@ -143,6 +145,30 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 
 Errors come back as `{"error": "..."}`, and for git and project actions also as a `problem`: what broke, why, the file and
 line if any, and what to do next.
+
+## AI edits (your own key)
+
+Click a block in the town and choose **Edit with AI**, or open any file in the Editor: type what to change (or pick a
+suggestion) and press Enter. The model sends back the whole updated file and the Editor shows it as a diff; **Accept**
+saves it (and the block lights up in the town), **Reject** drops it, **Try again** keeps your instruction. Saving
+refuses if the file changed meanwhile, so nothing is overwritten.
+
+Pick the model in **Extensions, AI models**. Paste a key, choose a model, then **Use this one**; **Test** checks it.
+
+| Provider | Cost | Notes |
+|---|---|---|
+| Groq | Free tier | Fast open models (Llama, Qwen, gpt-oss) |
+| Google Gemini | Free tier | Gemini 2.5 Flash and Pro |
+| OpenRouter | Free models | Models ending in `:free`, plus paid ones |
+| Ollama | Free, on this computer | No key; install Ollama and `ollama pull qwen2.5-coder` |
+| DeepSeek | Paid | `deepseek-chat`, `deepseek-reasoner` |
+| Anthropic Claude | Paid | Official SDK; Claude Opus 5.5 by default, with server-side refusal fallback |
+| OpenAI | Paid | |
+| Custom | Any | Any OpenAI-compatible API address |
+
+Model names are suggestions; type any model your provider offers. Keys are kept in `ai.json` in the config folder
+(`~/.code-visualizer`), readable only by you, and never sent back to the window. The backend code is
+`backend/visualizer/ai.py`; the Editor's prompt bar and review are `src/renderer/aiedit.tsx`.
 
 ## Hand control (hologram)
 

@@ -4,6 +4,8 @@ import { ALL, PRESETS, TITLES, type Layout } from './layout.js';
 import { useAgentLink } from './agentlink.js';
 import { Ico } from './icons.js';
 import { useCv } from './state.js';
+import { AIBar, AIModels, AIReview } from './aiedit.js';
+import type { AIEdit } from './ai.js';
 
 interface PopupProps {
   title: string;
@@ -146,9 +148,22 @@ interface FileBody {
 }
 
 export function EditorPopup(): JSX.Element | null {
-  const { editorOpen, setEditorOpen, editorFile, root } = useCv();
+  const { editorOpen, setEditorOpen, editorFile, root, editorAsk } = useCv();
   const [body, setBody] = useState<FileBody | null>(null);
   const [err, setErr] = useState('');
+  const [proposal, setProposal] = useState<AIEdit | null>(null);
+  const [saved, setSaved] = useState('');
+  const [reload, setReload] = useState(0);
+  const [focus, setFocus] = useState(0);
+
+  useEffect(() => {
+    setProposal(null);
+    setSaved('');
+  }, [editorFile]);
+
+  useEffect(() => {
+    if (editorAsk) setFocus((n) => n + 1);
+  }, [editorAsk]);
 
   useEffect(() => {
     if (!editorOpen || !editorFile || !root) return;
@@ -164,7 +179,7 @@ export function EditorPopup(): JSX.Element | null {
     return () => {
       live = false;
     };
-  }, [editorOpen, editorFile, root]);
+  }, [editorOpen, editorFile, root, reload]);
 
   if (!editorOpen) return null;
   const lines = body ? body.text.split(/\r?\n/) : [];
@@ -180,15 +195,37 @@ export function EditorPopup(): JSX.Element | null {
           </div>
         </div>
       )}
-      {body && (
-        <div className="code" aria-label={`Contents of ${body.file}`}>
-          {lines.map((l, i) => (
-            <div key={i} className="ln">
-              <i>{i + 1}</i>
-              <s>{l || ' '}</s>
-            </div>
-          ))}
-          {body.truncated && <div className="mline">Only the first part of this file is shown.</div>}
+      {proposal && root ? (
+        <AIReview
+          root={root}
+          edit={proposal}
+          onRetry={() => {
+            setProposal(null);
+            setFocus((n) => n + 1);
+          }}
+          onDone={(ok) => {
+            setProposal(null);
+            setSaved(ok ? `Saved: ${proposal.summary || 'the change'}` : '');
+            if (ok) setReload((n) => n + 1);
+          }}
+        />
+      ) : (
+        body && (
+          <div className="code" aria-label={`Contents of ${body.file}`}>
+            {saved && <div className="aisaved" role="status">{saved}</div>}
+            {lines.map((l, i) => (
+              <div key={i} className="ln">
+                <i>{i + 1}</i>
+                <s>{l || ' '}</s>
+              </div>
+            ))}
+            {body.truncated && <div className="mline">Only the first part of this file is shown.</div>}
+          </div>
+        )
+      )}
+      {editorFile && root && body && !body.truncated && (
+        <div hidden={!!proposal}>
+          <AIBar root={root} file={editorFile} focusKey={focus} onProposal={setProposal} />
         </div>
       )}
     </Popup>
@@ -415,6 +452,14 @@ export function ExtensionsPopup({ onClose }: { onClose: () => void }): JSX.Eleme
             <span className={`chip ${git ? 'ok' : ''}`}>{git ? `On ${git.branch}` : root ? 'No git repository' : 'No project'}</span>
           </div>
           <p className="mut small">Stage, commit and push from Source control. Pushing uses the git login already on this computer, so nothing is stored here.</p>
+        </section>
+
+        <section className="extcard" id="ext-ai">
+          <div className="exth">
+            <b>AI models</b>
+            <span className="chip">Your own key</span>
+          </div>
+          <AIModels />
         </section>
 
         {['Codex', 'Cursor', 'Gemini CLI'].map((n) => (

@@ -3,3 +3,4 @@ djangorestframework>=3.15,<3.17
 waitress>=3.0
 pytest>=8.3
 pytest-django>=4.9
+anthropic>=2.5,<3

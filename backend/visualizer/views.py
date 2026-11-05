@@ -17,9 +17,10 @@ from .git import NotARepo, git_status
 from .hub import hub
 from .models import Project
 from .runner import run_command, stop_run
-from . import agent, connector, doctor, gitops, projects
+from . import agent, ai, connector, doctor, gitops, projects
 from .serializers import (
-    AgentSerializer, CloneSerializer, CommitSerializer, FileSerializer, NewProjectSerializer, FolderSerializer, PushSerializer, RunSerializer, StageSerializer,
+    AgentSerializer, AIEditSerializer, AISettingsSerializer, CloneSerializer, CommitSerializer, FileSerializer, FileWriteSerializer, NewProjectSerializer,
+    FolderSerializer, PushSerializer, RunSerializer, StageSerializer,
 )
 from .analyzer import analyze_project
 from .tools import ToolError, call_tool, list_tools
@@ -165,25 +166,110 @@ def _problem_response(p: dict) -> Response:
     return Response({"error": p["what"], "problem": p}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _project_file(root_str: str, rel: str):
+    """The file inside the project folder, or an error response. Never anything outside the folder."""
+    root = Path(root_str).resolve()
+    target = (root / rel).resolve()
+    if target == root or root not in target.parents:
+        return None, None, Response({"error": "That file is outside the project folder"}, status=status.HTTP_400_BAD_REQUEST)
+    if not target.is_file():
+        return None, None, Response({"error": f"That file does not exist: {rel}"}, status=status.HTTP_400_BAD_REQUEST)
+    return root, target, None
+
+
+def _read_text(target: Path):
+    size = target.stat().st_size
+    data = target.read_bytes()[:MAX_FILE_BYTES]
+    if b"\x00" in data[:4096]:
+        return None, size, Response({"error": "That file is not text"}, status=status.HTTP_400_BAD_REQUEST)
+    return data.decode("utf-8", errors="replace"), size, None
+
+
 class FileView(APIView):
     """Shows one file of the open project. It never reads outside that folder."""
 
     def post(self, request):
         s = FileSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        root = Path(s.validated_data["path"]).resolve()
-        target = (root / s.validated_data["file"]).resolve()
-        if target != root and root not in target.parents:
-            return Response({"error": "That file is outside the project folder"}, status=status.HTTP_400_BAD_REQUEST)
-        if not target.is_file():
-            return Response({"error": f"That file does not exist: {s.validated_data['file']}"}, status=status.HTTP_400_BAD_REQUEST)
-        size = target.stat().st_size
-        data = target.read_bytes()[:MAX_FILE_BYTES]
-        if b"\x00" in data[:4096]:
-            return Response({"error": "That file is not text"}, status=status.HTTP_400_BAD_REQUEST)
-        text = data.decode("utf-8", errors="replace")
+        root, target, err = _project_file(s.validated_data["path"], s.validated_data["file"])
+        if err:
+            return err
+        text, size, err = _read_text(target)
+        if err:
+            return err
         lines = len(text.splitlines()) or 1
         return Response({"file": target.relative_to(root).as_posix(), "text": text, "lines": lines, "truncated": size > MAX_FILE_BYTES})
+
+
+class FileWriteView(APIView):
+    """Saves an accepted AI edit. Refuses when the file changed since the edit was made, so nothing is overwritten."""
+
+    def post(self, request):
+        s = FileWriteSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        root, target, err = _project_file(s.validated_data["path"], s.validated_data["file"])
+        if err:
+            return err
+        current, size, err = _read_text(target)
+        if err:
+            return err
+        if size > MAX_FILE_BYTES or current != s.validated_data["base"]:
+            p = {"what": "The file changed since this edit was made", "why": ["Saving now would overwrite those changes"],
+                 "file": s.validated_data["file"], "line": None, "next": "Ask again so the edit starts from the file as it is now."}
+            return Response({"error": p["what"], "problem": p}, status=status.HTTP_409_CONFLICT)
+        target.write_text(s.validated_data["content"], encoding="utf-8", newline="")
+        rel = target.relative_to(root).as_posix()
+        hub.push({"type": "file.change", "source": "app", "path": rel, "op": "edit"})
+        return Response({"file": rel, "saved": True})
+
+
+def _ai_error(err: "ai.AIProblem") -> Response:
+    return Response({"error": err.problem["what"], "problem": err.problem}, status=err.status)
+
+
+class AISettingsView(APIView):
+    """The AI providers and which one is in use. Keys are write-only: the window gets only a hint of each key."""
+
+    def get(self, request):
+        return Response(ai.public_settings())
+
+    def post(self, request):
+        s = AISettingsSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        try:
+            return Response(ai.update_settings(d["provider"], d.get("apiKey"), d.get("model"), d.get("baseUrl"), d.get("clearKey", False), d.get("makeActive", False)))
+        except ai.AIProblem as err:
+            return _ai_error(err)
+
+
+class AITestView(APIView):
+    def post(self, request):
+        try:
+            return Response(ai.test(request.data.get("provider") or None))
+        except ai.AIProblem as err:
+            return _ai_error(err)
+
+
+class AIEditView(APIView):
+    """Asks the chosen model to apply an instruction to one file. Returns the proposed file; nothing is saved here."""
+
+    def post(self, request):
+        s = AIEditSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        root, target, err = _project_file(d["path"], d["file"])
+        if err:
+            return err
+        text, size, err = _read_text(target)
+        if err:
+            return err
+        if size > MAX_FILE_BYTES:
+            return _ai_error(ai.AIProblem(ai.problem("This file is too long to edit with AI here", [f"{size:,} bytes"], "Ask Claude Code in the Chat instead.")))
+        try:
+            return Response(ai.edit(d.get("provider") or None, target.relative_to(root).as_posix(), text, d["instruction"]))
+        except ai.AIProblem as err:
+            return _ai_error(err)
 
 
 class GitChangesView(APIView):

@@ -45,7 +45,10 @@ interface Ctx {
   selected: string | null;
   select: (path: string | null) => void;
   editorFile: string | null;
-  openEditor: (path: string) => void;
+  /** Opens a file in the editor; with { ai: true } the AI prompt is focused, ready to type. */
+  openEditor: (path: string, opts?: { ai?: boolean }) => void;
+  /** Goes up each time the editor is opened for an AI edit. */
+  editorAsk: number;
   terminalOpen: boolean;
   editorOpen: boolean;
   setTerminalOpen: (v: boolean) => void;
@@ -99,6 +102,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [note, setNote] = useState<Note | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [editorFile, setEditorFile] = useState<string | null>(null);
+  const [editorAsk, setEditorAsk] = useState(0);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
@@ -243,13 +247,14 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
     townRef.current?.select(path);
   }, []);
 
-  const openEditor = useCallback((path: string) => {
+  const openEditor = useCallback((path: string, opts?: { ai?: boolean }) => {
     setEditorFile(path);
     setEditorOpen(true);
+    if (opts?.ai) setEditorAsk((n) => n + 1);
   }, []);
 
   const value: Ctx = {
-    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor,
+    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
     sendPrompt, agentLines, agentRunning, stopAgent,
   };

@@ -23,6 +23,15 @@ function Shell(): JSX.Element {
   const [custom, setCustom] = useState(false);
   const [menu, setMenu] = useState(false);
   const [ext, setExt] = useState(false);
+  useEffect(() => {
+    // The editor's AI prompt opens Extensions at the AI models section.
+    const open = (): void => {
+      setExt(true);
+      window.setTimeout(() => document.getElementById('ext-ai')?.scrollIntoView({ block: 'start' }), 50);
+    };
+    window.addEventListener('cv:open-ai-setup', open);
+    return () => window.removeEventListener('cv:open-ai-setup', open);
+  }, []);
   const [newp, setNewp] = useState(false);
 
   const setLayout = useCallback((fn: (l: Layout) => Layout) => {

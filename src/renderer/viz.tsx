@@ -263,6 +263,9 @@ function BuildView(): JSX.Element {
           <button className="ico" title="Open in editor" aria-label="Open in editor" onClick={() => openEditor(shown)}>
             {OPEN_ICON}
           </button>
+          <button className="aibtn" title="Change this file with AI" onClick={() => openEditor(shown, { ai: true })}>
+            <span aria-hidden="true">✦</span> Edit with AI
+          </button>
         </div>
       )}
       {!analysis && <div className="nogl">Open a project to build its town.</div>}
