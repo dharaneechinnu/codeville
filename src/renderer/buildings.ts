@@ -75,11 +75,36 @@ function drawBay(g: CanvasRenderingContext2D, style: BuildingStyle, x: number, w
   }
 }
 
+/** A wall with no windows painted on it: only the style's own surface (brick courses, stone bands, panels). */
+function drawWall(g: CanvasRenderingContext2D, style: BuildingStyle, x: number, w: number, h: number, wall: THREE.Color): void {
+  if (style === 'workshop') {
+    g.fillStyle = shade(wall, -0.12);
+    for (let r = 0; r < 4; r++) g.fillRect(x, h * (0.02 + r * 0.25), w, h * 0.03);
+    g.fillRect(x + w * 0.5, h * 0.05, w * 0.03, h * 0.22);
+    g.fillRect(x, h * 0.55, w * 0.03, h * 0.22);
+  } else if (style === 'library') {
+    g.fillStyle = shade(wall, 0.16);
+    g.fillRect(x, 0, w, h * 0.08);
+    g.fillRect(x + w * 0.02, h * 0.08, w * 0.1, h * 0.92);
+  } else if (style === 'office') {
+    g.fillStyle = shade(wall, 0.12);
+    g.fillRect(x, h * 0.9, w, h * 0.1);
+    g.fillStyle = shade(wall, -0.1);
+    g.fillRect(x, 0, w * 0.04, h);
+  } else if (style === 'apartment') {
+    g.fillStyle = shade(wall, 0.14);
+    g.fillRect(x, h * 0.88, w, h * 0.12);
+  } else {
+    g.fillStyle = shade(wall, -0.16);
+    g.fillRect(x, h * 0.9, w, h * 0.1);
+  }
+}
+
 const walls = new Map<string, THREE.CanvasTexture>();
 
 /** The wall of one floor: the layer's colour with this style's windows, some of them lit. */
-function wallTexture(style: BuildingStyle, color: THREE.Color, bays: number): THREE.CanvasTexture {
-  const key = `${style}:${color.getHexString()}:${bays}`;
+function wallTexture(style: BuildingStyle, color: THREE.Color, bays: number, plain = false): THREE.CanvasTexture {
+  const key = `${style}:${color.getHexString()}:${bays}:${plain}`;
   let tex = walls.get(key);
   if (tex) return tex;
   const c = document.createElement('canvas');
@@ -91,7 +116,8 @@ function wallTexture(style: BuildingStyle, color: THREE.Color, bays: number): TH
   let seed = [...key].reduce((s, ch) => (s * 31 + ch.charCodeAt(0)) >>> 0, 7);
   for (let i = 0; i < BAYS; i++) {
     seed = (seed * 1664525 + 1013904223) >>> 0;
-    drawBay(g, style, i * 64, 64, 64, color, seed % 100 < 38);
+    if (plain) drawWall(g, style, i * 64, 64, 64, color);
+    else drawBay(g, style, i * 64, 64, 64, color, seed % 100 < 38);
   }
   tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
@@ -103,9 +129,9 @@ function wallTexture(style: BuildingStyle, color: THREE.Color, bays: number): TH
 }
 
 /** The six materials of one floor: windowed walls on the four sides, a plain slab above and below. */
-export function floorMaterials(style: BuildingStyle, color: THREE.Color, width: number): THREE.MeshStandardMaterial[] {
+export function floorMaterials(style: BuildingStyle, color: THREE.Color, width: number, plain = false): THREE.MeshStandardMaterial[] {
   const bays = Math.max(2, Math.round(width / 0.85));
-  const side = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ map: wallTexture(style, color, bays), roughness: style === 'office' ? 0.35 : 0.85, metalness: style === 'office' ? 0.25 : 0, emissive: '#000000' });
+  const side = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ map: wallTexture(style, color, bays, plain), roughness: style === 'office' ? 0.35 : 0.85, metalness: style === 'office' ? 0.25 : 0, emissive: '#000000' });
   const slab = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: shade(color, -0.2), roughness: 0.9, emissive: '#000000' });
   return [side(), side(), slab(), slab(), side(), side()];
 }
@@ -168,7 +194,7 @@ export interface Dressing {
 
 /** Everything around the floors that makes a building of this style: what is at street level and what is on the roof.
  * The front of a building faces +z. The layer changes small things, so the three buildings of a feature are siblings, not copies. */
-export function dress(style: BuildingStyle, width: number, layer: Layer, wall: THREE.Color): Dressing {
+export function dress(style: BuildingStyle, width: number, layer: Layer, wall: THREE.Color, withDoor = true): Dressing {
   const base = new THREE.Group();
   const roof = new THREE.Group();
   const w = width;
@@ -177,6 +203,7 @@ export function dress(style: BuildingStyle, width: number, layer: Layer, wall: T
   const front1 = layer === 'frontend' || layer === 'database';
 
   const door = (dw: number, dh: number, color = '#1b1410'): void => {
+    if (!withDoor) return;
     const d = box(dw, dh, 0.06, color);
     d.position.set(0, dh / 2, front + 0.02);
     base.add(d);
@@ -286,13 +313,19 @@ export function dress(style: BuildingStyle, width: number, layer: Layer, wall: T
     }
   } else {
     // a roller door, a saw-tooth roof with glass faces, and a chimney
-    const roller = box(w * 0.46, 0.7, 0.06, '#3a4157');
-    roller.position.set(0, 0.35, front + 0.02);
-    base.add(roller);
-    for (let k = 1; k < 5; k++) {
-      const rib = box(w * 0.46, 0.02, 0.07, '#5a637d');
-      rib.position.set(0, k * 0.14, front + 0.03);
-      base.add(rib);
+    if (withDoor) {
+      const roller = box(w * 0.46, 0.7, 0.06, '#3a4157');
+      roller.position.set(0, 0.35, front + 0.02);
+      base.add(roller);
+      for (let k = 1; k < 5; k++) {
+        const rib = box(w * 0.46, 0.02, 0.07, '#5a637d');
+        rib.position.set(0, k * 0.14, front + 0.03);
+        base.add(rib);
+      }
+    } else {
+      const lamp = box(0.9, 0.06, 0.3, '#5a637d');
+      lamp.position.set(0, 0.84, front + 0.15);
+      base.add(lamp);
     }
     const teeth = 3;
     for (let k = 0; k < teeth; k++) {
@@ -310,4 +343,84 @@ export function dress(style: BuildingStyle, width: number, layer: Layer, wall: T
     }
   }
   return { base, roof };
+}
+
+/** One piece of roof for a house, covering a strip `depth` deep. The shape follows the style: a pitched slice,
+ * a factory tooth, or a flat slab. Each test file is one piece. */
+export function roofPiece(style: BuildingStyle, width: number, depth: number, color: string): THREE.Mesh {
+  const mat = (): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color, roughness: 0.8, emissive: '#000000' });
+  if (style === 'library') {
+    // a slice of a pitched roof: the triangle faces the street, the slice runs back
+    const shape = new THREE.Shape();
+    shape.moveTo(-width / 2 - 0.15, 0);
+    shape.lineTo(0, width * 0.36);
+    shape.lineTo(width / 2 + 0.15, 0);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: depth * 0.94, bevelEnabled: false });
+    geo.translate(0, 0, -depth * 0.47);
+    return new THREE.Mesh(geo, mat());
+  }
+  if (style === 'workshop') {
+    const shape = new THREE.Shape();
+    shape.moveTo(-depth * 0.47, 0);
+    shape.lineTo(-depth * 0.47, 0.55);
+    shape.lineTo(depth * 0.47, 0);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
+    geo.translate(0, 0, -width / 2);
+    geo.rotateY(-Math.PI / 2);
+    return new THREE.Mesh(geo, mat());
+  }
+  const lift = style === 'office' ? 0.34 : style === 'apartment' ? 0.2 : 0.26;
+  const geo = new THREE.BoxGeometry(width + 0.2, lift, depth * 0.94);
+  geo.translate(0, lift / 2, 0);
+  return new THREE.Mesh(geo, mat());
+}
+
+/** Street-level trim for a house, kept clear of the door and windows because those are files a person must be able to
+ * see and pick. It sits above the ground storey (which is `fh` tall) or at the corners. Plain structure, not files. */
+export function houseTrim(style: BuildingStyle, w: number, d: number, fh: number): THREE.Group {
+  const g = new THREE.Group();
+  const front = d / 2;
+  if (style === 'shop') {
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.05, 0.5), new THREE.MeshStandardMaterial({ map: stripes('#ffffff', '#e84a5f'), roughness: 0.8 }));
+    awning.position.set(0, fh + 0.06, front + 0.24);
+    awning.rotation.x = 0.2;
+    g.add(awning);
+  } else if (style === 'library') {
+    for (const x of [-1, 1]) {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, fh, 10), solid('#eef0f8', 0.7));
+      col.position.set(x * (w / 2 - 0.12), fh / 2, front + 0.4);
+      g.add(col);
+    }
+    const porch = box(w + 0.1, 0.1, 0.6, '#dfe2ee');
+    porch.position.set(0, fh + 0.05, front + 0.3);
+    g.add(porch);
+  } else if (style === 'office') {
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(w * 0.5, 0.05, 0.6), new THREE.MeshStandardMaterial({ color: '#bfe9ff', roughness: 0.2, metalness: 0.4, transparent: true, opacity: 0.75 }));
+    canopy.position.set(0, fh + 0.03, front + 0.3);
+    g.add(canopy);
+    for (const x of [-1, 1]) {
+      const fin = box(0.08, fh * 2, 0.08, '#e7ecf7');
+      fin.position.set(x * (w / 2 + 0.04), fh, front + 0.04);
+      g.add(fin);
+    }
+  } else if (style === 'apartment') {
+    const balcony = box(w * 0.9, 0.08, 0.36, '#dfe2ee');
+    balcony.position.set(0, fh + 0.04, front + 0.18);
+    g.add(balcony);
+    const rail = box(w * 0.9, 0.22, 0.03, '#aab2c8');
+    rail.position.set(0, fh + 0.19, front + 0.35);
+    g.add(rail);
+  } else {
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, fh * 1.6, 10), solid('#8a4a40'));
+    stack.position.set(w / 2 + 0.3, fh * 0.8, -d * 0.2);
+    g.add(stack);
+  }
+  // the path from the street to the door: this is the way in
+  const path = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.25), new THREE.MeshStandardMaterial({ color: '#cfd3e2', roughness: 1 }));
+  path.rotation.x = -Math.PI / 2;
+  path.position.set(0, 0.012, front + 0.66);
+  g.add(path);
+  return g;
 }

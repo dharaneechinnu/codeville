@@ -2,7 +2,7 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Analysis, Connection, Feature, FileLink, Layer, LinkKind } from '../shared/types.js';
 import type { CvEvent } from '../shared/events.js';
-import { dress, floorMaterials, styleFor, type BuildingStyle } from './buildings.js';
+import { dress, floorMaterials, houseTrim, roofPiece, styleFor, type BuildingStyle } from './buildings.js';
 
 /** Every block is colored by the layer its file belongs to, so one building shows how a feature is built. */
 export const LAYER_COLOR: Record<Layer, string> = { frontend: '#19c6e6', backend: '#ff9f43', database: '#8a5cff', tests: '#5be37a' };
@@ -44,7 +44,22 @@ interface Floor {
   bad?: boolean;
   /** How this block is linked to the selected block, when it is. */
   rel?: LinkKind;
+  /** What part of a house this file is: the door, a window, a floor or a piece of roof. */
+  role?: Role;
+  /** A part that glows a little by itself, like a lit window. */
+  base?: string;
 }
+
+/** The parts of a house. Each part is one file, and the kind of part says what the file is for. */
+export type Role = 'door' | 'window' | 'floor' | 'roof';
+export const ROLE_NAME: Record<Role, string> = { door: 'Door', window: 'Window', floor: 'Floor', roof: 'Roof' };
+
+const HOUSE_W = 3.4;
+const HOUSE_D = 2.8;
+const WINDOW_X = [-1.25, -0.45, 0.45, 1.25];
+const SHELL = '#7f869e'; // a storey that is no file: it only carries windows
+const ENTRY_FRONT = /(page|screen|index|home|app|main|list|login|view)/i;
+const ENTRY_BACK = /(route|url|view|api|controller|handler|main|index|server)/i;
 
 /** A wire between two blocks: drawn only for the selected block, with a packet moving the way the link points. */
 interface Wire {
@@ -78,6 +93,10 @@ interface Building {
   service: boolean;
   /** The parts on top of the last floor (roof, sign, chimney). Moves up when a floor is added. */
   roof: THREE.Group | null;
+  /** A house: one building for a whole feature, whose door, windows, floors and roof are its files. */
+  house?: { storeys: number; windows: number; tests: Floor[] };
+  /** Top of the walls, above the building's own ground. */
+  height: number;
   fire: THREE.Group;
   failed: boolean;
   activeUntil: number;
@@ -252,7 +271,7 @@ export class Town {
         const b: Building = {
           feature: bf, layer, district: dist, group: bg, floors: [], color: new THREE.Color(service ? SERVICE_COLOR : LAYER_COLOR[layer]), width, service,
           fh: service ? 0.9 : Math.min(0.92, Math.max(0.3, 8 / Math.max(1, Math.min(files.length, MAX_FLOORS)))),
-          roof: null, fire: this.makeFire(), failed: false, activeUntil: 0,
+          roof: null, height: 0, fire: this.makeFire(), failed: false, activeUntil: 0,
         };
         b.fire.visible = false;
         bg.add(b.fire);
@@ -273,10 +292,9 @@ export class Town {
       this.districts.push(dist);
     };
 
-    const LAYERS: Layer[] = ['frontend', 'backend', 'tests'];
     app.forEach((f, i) => {
-      const present = LAYERS.filter((l) => f.files.some((file) => file.layer === l));
-      makeDistrict(f, (i % cols) * DISTRICT_X, Math.floor(i / cols) * DISTRICT_Z, present.length ? present : ['backend'], 2.6);
+      const n = stepOf.get(f.id);
+      this.makeHouse(f, (i % cols) * DISTRICT_X, Math.floor(i / cols) * DISTRICT_Z, n ? `${n} · ${f.name}` : f.name, n ? 'step' : '');
     });
     if (db) makeDistrict(db, xC, -DISTRICT_Z, ['database'], 5.2, 'db');
     services.forEach((name, i) => {
@@ -363,7 +381,7 @@ export class Town {
   }
 
   private anchor(b: Building): THREE.Vector3 {
-    return new THREE.Vector3(b.district.x + b.group.position.x, 0.18 + b.floors.length * b.fh + (b.roof ? 1.1 : 0.25), b.district.z + b.group.position.z);
+    return new THREE.Vector3(b.district.x + b.group.position.x, 0.18 + b.height + (b.roof || b.house ? 1.1 : 0.25), b.district.z + b.group.position.z);
   }
 
   /** One curved pipe between two buildings, with a small packet that travels along it. */
@@ -435,6 +453,127 @@ export class Town {
     return g;
   }
 
+  /** Registers one mesh as the part of a building that stands for one file. */
+  private addPart(b: Building, mesh: THREE.Mesh, path: string, role: Role): Floor {
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35 }));
+    mesh.add(edges);
+    const floor: Floor = { mesh, path, isNew: false, role };
+    mesh.userData.floor = floor;
+    mesh.userData.building = b;
+    b.group.add(mesh);
+    b.floors.push(floor);
+    this.meshes.push(mesh);
+    if (path) this.floorByPath.set(path, { b, floor });
+    return floor;
+  }
+
+  private houseWindow(b: Building, path: string, slot: number): Floor {
+    // The ground storey has the door in the middle, so it holds two windows; every storey above holds four.
+    const storey = slot < 2 ? 0 : 1 + Math.floor((slot - 2) / 4);
+    const x = slot < 2 ? WINDOW_X[slot * 3]! : WINDOW_X[(slot - 2) % 4]!;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.62, b.fh * 0.56, 0.12),
+      new THREE.MeshStandardMaterial({ color: '#7fe9ff', roughness: 0.25, metalness: 0.1, emissive: '#0f6f88' }),
+    );
+    mesh.position.set(x, storey * b.fh + b.fh * 0.54, HOUSE_D / 2 + 0.03);
+    const part = this.addPart(b, mesh, path, 'window');
+    part.base = '#0f6f88';
+    return part;
+  }
+
+  private houseStorey(b: Building, i: number, path: string): Floor | null {
+    const color = new THREE.Color(path ? LAYER_COLOR.backend : SHELL).offsetHSL(0, 0, i % 2 ? 0.03 : -0.03);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(HOUSE_W, b.fh * 0.97, HOUSE_D), floorMaterials(this.style, color, HOUSE_W, true));
+    mesh.position.y = i * b.fh + b.fh / 2;
+    if (path) return this.addPart(b, mesh, path, 'floor');
+    // A storey with no file behind it is plain structure: it cannot be picked.
+    mesh.userData.trim = true;
+    b.group.add(mesh);
+    return null;
+  }
+
+  /** Lays the roof: one piece per test file, side by side from the street to the back. */
+  private houseRoof(b: Building): void {
+    const tests = b.house!.tests;
+    tests.forEach((f, k) => {
+      const depth = HOUSE_D / tests.length;
+      f.mesh.position.set(0, b.height, (k - (tests.length - 1) / 2) * depth);
+    });
+  }
+
+  /** One feature as one house. Each part is a file: the door is the way in, windows are what people see (frontend),
+   * floors are the work inside (backend), and the roof is what protects it (tests). A house with no tests has no roof. */
+  private makeHouse(f: Feature, x: number, z: number, label: string, extra: string): void {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+    const dist: District = { id: f.id, name: f.name, x, z, group, label: this.makeLabel(label, extra), buildings: [] };
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(HOUSE_W + 2.2, 0.18, HOUSE_D + 2.6), new THREE.MeshStandardMaterial({ color: '#262c5e', roughness: 1 }));
+    pad.position.y = 0.09;
+    group.add(pad);
+
+    const of = (layer: Layer): typeof f.files => f.files.filter((file) => file.layer === layer);
+    const front = of('frontend'), back = of('backend').slice(0, MAX_FLOORS), tests = of('tests').slice(0, 12);
+    // The door is the file people come in through: a page or screen, or for a feature with no screens its routes.
+    const name = (p: string): string => p.split('/').pop() ?? p;
+    const entry = front.find((x) => ENTRY_FRONT.test(name(x.path))) ?? front[0] ?? back.find((x) => ENTRY_BACK.test(name(x.path)));
+    const windows = front.filter((x) => x !== entry).slice(0, 2 + (MAX_FLOORS - 1) * 4);
+    const floors = back.filter((x) => x !== entry);
+    const storeys = Math.max(1, floors.length, windows.length <= 2 ? 1 : 1 + Math.ceil((windows.length - 2) / 4));
+
+    const bg = new THREE.Group();
+    bg.position.y = 0.18;
+    const b: Building = {
+      feature: { ...f, id: `${f.id}:house` }, layer: 'backend', district: dist, group: bg, floors: [], color: new THREE.Color(LAYER_COLOR.backend),
+      width: HOUSE_W, fh: Math.min(1.3, Math.max(0.55, 10 / storeys)), service: false, roof: null, height: 0,
+      house: { storeys, windows: 0, tests: [] }, fire: this.makeFire(), failed: false, activeUntil: 0,
+    };
+    b.height = storeys * b.fh;
+    b.fire.visible = false;
+    bg.add(b.fire);
+
+    for (let i = 0; i < storeys; i++) this.houseStorey(b, i, floors[i]?.path ?? '');
+    windows.forEach((w) => this.houseWindow(b, w.path, b.house!.windows++));
+    // the door, in a frame
+    const dh = Math.min(1.05, b.fh * 0.84);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.98, dh + 0.1, 0.08), new THREE.MeshStandardMaterial({ color: '#f2f4ff', roughness: 0.7 }));
+    frame.position.set(0, (dh + 0.1) / 2, HOUSE_D / 2 + 0.02);
+    frame.userData.trim = true;
+    bg.add(frame);
+    const door = new THREE.Mesh(
+      new THREE.BoxGeometry(0.78, dh, 0.14),
+      new THREE.MeshStandardMaterial({ color: entry ? '#ffd23f' : '#3a4157', roughness: 0.6, emissive: entry ? '#6b5200' : '#000000' }),
+    );
+    door.position.set(0, dh / 2, HOUSE_D / 2 + 0.05);
+    if (entry) this.addPart(b, door, entry.path, 'door').base = '#6b5200';
+    else {
+      door.userData.trim = true;
+      bg.add(door);
+    }
+    for (const t of tests) b.house!.tests.push(this.addPart(b, roofPiece(this.style, HOUSE_W, HOUSE_D / tests.length, LAYER_COLOR.tests), t.path, 'roof'));
+    this.houseRoof(b);
+    // street-level trim of the town's style (awning, columns, canopy); plain structure, not files
+    const trim = houseTrim(this.style, HOUSE_W, HOUSE_D, b.fh);
+    trim.traverse((o) => (o.userData.trim = true));
+    bg.add(trim);
+
+    group.add(bg);
+    dist.buildings.push(b);
+    for (const key of ['house', 'frontend', 'backend', 'tests']) this.buildings.set(`${f.id}:${key}`, b);
+    this.scene.add(group);
+    this.districts.push(dist);
+  }
+
+  /** A file that appeared after the town was built joins its house: a new window, or a new floor under the roof. */
+  private growHouse(b: Building, path: string, layer: Layer): Floor | null {
+    const h = b.house!;
+    if (layer === 'frontend' && h.windows < 2 + (h.storeys - 1) * 4) return this.houseWindow(b, path, h.windows++);
+    if (layer !== 'backend' || h.storeys >= MAX_FLOORS) return null;
+    const floor = this.houseStorey(b, h.storeys++, path);
+    b.height = h.storeys * b.fh;
+    this.houseRoof(b);
+    return floor;
+  }
+
   private addFloor(b: Building, path: string, isNew: boolean, layer: Layer = 'backend', color?: string): Floor {
     const i = b.floors.length;
     const base = new THREE.Color(color ?? LAYER_COLOR[layer]).offsetHSL(0, 0, i % 2 ? 0.04 : -0.04);
@@ -451,7 +590,8 @@ export class Town {
     b.group.add(mesh);
     b.floors.push(floor);
     this.meshes.push(mesh);
-    if (b.roof) b.roof.position.y = b.floors.length * b.fh;
+    b.height = b.floors.length * b.fh;
+    if (b.roof) b.roof.position.y = b.height;
     if (path) this.floorByPath.set(path, { b, floor });
     return floor;
   }
@@ -466,10 +606,12 @@ export class Town {
         this.pulse(hit.floor);
       } else {
         const b = this.buildingFor(e.path);
-        if (b && b.floors.length < MAX_FLOORS) {
-          const floor = this.addFloor(b, e.path, true, layerGuess(e.path));
-          b.activeUntil = now + 4000;
+        if (b) b.activeUntil = now + 4000;
+        const floor = !b ? null : b.house ? this.growHouse(b, e.path, layerGuess(e.path)) : b.floors.length < MAX_FLOORS ? this.addFloor(b, e.path, true, layerGuess(e.path)) : null;
+        if (floor) {
+          floor.isNew = true;
           this.pulse(floor);
+          if (this.holo) this.applyHologram();
         }
       }
     } else if (e.type === 'step.fail' || (e.type === 'run.end' && e.status === 'fail' && e.problem)) {
@@ -490,7 +632,7 @@ export class Town {
       f.bad = failed && (!floor || f === floor);
       this.paint(f);
     }
-    if (failed) b.fire.position.y = b.floors.length * b.fh + (b.roof ? 1.2 : 0.6);
+    if (failed) b.fire.position.y = b.height + (b.roof || b.house ? 1.2 : 0.6);
   }
 
   private findFloor(path: string): { b: Building; floor: Floor } | undefined {
@@ -507,7 +649,9 @@ export class Town {
     const dir = path.split('/').slice(0, -1);
     const layer = layerGuess(path);
     const all = [...this.buildings.values()].filter((b) => !b.service);
-    const pool = all.some((b) => b.layer === layer) ? all.filter((b) => b.layer === layer) : all;
+    // A house holds every layer of its feature, so any house can take the file; the folder decides which.
+    const houses = all.filter((b) => b.house);
+    const pool = houses.length ? houses : all.some((b) => b.layer === layer) ? all.filter((b) => b.layer === layer) : all;
     let best: Building | undefined;
     let score = -1;
     for (const b of pool) {
@@ -531,7 +675,7 @@ export class Town {
   focusFeature(id: string): void {
     const d = this.districts.find((x) => x.id === id);
     if (!d) return;
-    const t = new THREE.Vector3(d.x, Math.max(1.5, Math.max(...d.buildings.map((b) => b.floors.length * b.fh)) / 2), d.z);
+    const t = new THREE.Vector3(d.x, Math.max(1.5, Math.max(...d.buildings.map((b) => b.height)) / 2), d.z);
     this.controls.target.copy(t);
     this.camera.position.set(t.x + 9, t.y + 8, t.z + 9);
   }
@@ -618,7 +762,7 @@ export class Town {
     else if (f.bad) this.glow(f, '#7a0f1a');
     else if (f === this.selected) this.glow(f, '#3b4170');
     else if (f.rel) this.glow(f, LINK_COLOR[f.rel], 0.4);
-    else this.glow(f, '#000000');
+    else this.glow(f, f.base ?? '#000000');
   }
 
   // ------------------------------------------------------------------------------------------ pointing
@@ -656,7 +800,7 @@ export class Town {
       if (floor) this.paint(floor);
       const b = mesh?.userData.building as Building | undefined;
       const name = floor?.path ? floor.path.split('/').pop()! : (b?.district.name ?? '');
-      this.tip.textContent = name;
+      this.tip.textContent = floor?.role ? `${ROLE_NAME[floor.role]} · ${name}` : name;
       this.tip.style.display = floor ? 'block' : 'none';
     }
     return mesh ? this.pickOf(mesh) : null;
@@ -705,7 +849,7 @@ export class Town {
   overview(): void {
     this.controls.target.copy(this.center);
     // A long street is seen from the front so all of it fits; a square town from its corner.
-    if (this.wide) this.camera.position.set(this.center.x + this.extent * 0.1, this.center.y + this.extent * 0.48, this.center.z + this.extent * 0.85);
+    if (this.wide) this.camera.position.set(this.center.x + this.extent * 0.08, this.center.y + this.extent * 0.3, this.center.z + this.extent * 0.92);
     else this.camera.position.set(this.center.x + this.extent * 0.42, this.center.y + this.extent * 0.4, this.center.z + this.extent * 0.55);
   }
   wholeProject(): void {
@@ -749,7 +893,7 @@ export class Town {
       this.tip.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(14px, -130%)`;
     }
     for (const d of this.districts) {
-      const top = Math.max(0.5, ...d.buildings.map((b) => b.floors.length * b.fh));
+      const top = Math.max(0.5, ...d.buildings.map((b) => b.height));
       const v = new THREE.Vector3(d.x, top + 2.4, d.z).project(this.camera);
       d.label.style.display = v.z > 1 ? 'none' : 'block';
       d.label.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(-50%, -100%)`;

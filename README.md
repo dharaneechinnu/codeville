@@ -96,10 +96,25 @@ on one street, numbered, with a lit road between them.
 Templates today, written by hand: Online store, Social app, Blog or content site, Dashboard app. A project that fits
 none follows its layers (Screens, Logic, Data, Tests). To add a kind of app, add an entry to `TEMPLATES`.
 
+## Reading a building
+
+Each feature is one house, and each part of the house is a file. The kind of part says what the file is for, so a
+new person can read a project without opening anything:
+
+| Part | Colour | The file is |
+|---|---|---|
+| Door | Yellow, with a path to the street | The way in: the page or screen people enter through, or the routes file when there are no screens. |
+| Window | Light blue | A screen people see (a frontend file). |
+| Floor | Orange | The work inside (a backend file). |
+| Roof | Green | A test file. A house with no roof has no tests. |
+| Grey walls | Grey | Plain structure that carries windows. Not a file. |
+
+Point at any part to see `Door · Cart.tsx` and so on; click or pinch to open it. The database stays its own building
+and outside services are small blocks.
+
 ## Building styles
 
-The town is drawn with real-looking buildings, not plain blocks. Each file is still one floor you can click or point
-at. The style is chosen from the kind of app the project is, so different projects look different at a glance:
+The style of the houses is chosen from the kind of app. The style is chosen from the kind of app the project is, so different projects look different at a glance:
 
 | Kind of app | Style | What you see |
 |---|---|---|
@@ -109,8 +124,8 @@ at. The style is chosen from the kind of app the project is, so different projec
 | Dashboard app | Glass offices | Glass walls, a set-back crown, a mast or a helipad. |
 | General app | Workshops | Brick walls, a roller door, a saw-tooth roof and a chimney. |
 
-Wall colour still shows the layer. Within one feature the frontend, backend and test buildings differ in small parts
-(awning colour, roof equipment). The styles are designed by hand in `src/renderer/buildings.ts`.
+The style changes the wall surface, the shape of the roof pieces and the trim over the ground floor. The styles are
+designed by hand in `src/renderer/buildings.ts`.
 
 ## Hand control
 

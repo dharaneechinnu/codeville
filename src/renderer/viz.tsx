@@ -145,6 +145,13 @@ function About(): JSX.Element | null {
             <dt>Buildings</dt>
             <dd><span className="tag">{STYLE_NAME[styleFor(a.flow?.template.id)]}</span><span className="mut small"> because this is {a.flow && a.flow.template.id !== 'general' ? `an ${a.flow.template.name.toLowerCase()}`.replace(/^an (?![aeio])/, 'a ') : 'a general app'}</span></dd>
           </div>
+          <ul className="readkey" aria-label="How to read a building">
+            <li><i className="k-door" /><b>Door</b> the way in: the page or route people enter through</li>
+            <li><i className="k-window" /><b>Window</b> a screen people see (frontend file)</li>
+            <li><i className="k-floor" /><b>Floor</b> the work inside (backend file)</li>
+            <li><i className="k-roof" /><b>Roof</b> a test file. No roof means no tests.</li>
+            <li><i className="k-shell" /><b>Grey</b> plain structure, not a file</li>
+          </ul>
           <div className="legend" aria-label="Block colors">
             {LAYER_NAMES.map(([k, name]) => (
               <span key={k}><i style={{ background: LAYER_COLOR[k] }} />{name} {a.layers[k]}</span>
