@@ -392,3 +392,23 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .aiprovacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .okmsg { color: var(--ok); } .badmsg { color: #ff8a98; }
 @media (prefers-reduced-motion: reduce) { .aispin { animation: none; } }
+
+/* Blocks: the name under the pointer, and jumps between linked files */
+.cv-tip { position: absolute; left: 0; top: 0; z-index: 2; font: 700 11px var(--mono); color: #06101a; background: #e8feff; padding: 2px 8px; white-space: nowrap; box-shadow: 0 0 12px rgba(25,230,255,.6); }
+.conn hr { border: none; border-top: 1px solid var(--line); margin: 3px 0; width: 100%; }
+.tag.go { cursor: pointer; font: 11px var(--mono); color: var(--text); }
+.tag.go:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Hand control fills the window (the holo lab). A pinch on a block opens its file in the editor docked on the right. */
+.stage.holo { position: fixed; inset: 0; z-index: 60; --dock: 0px; }
+.stage.holo.split { --dock: min(46%, 640px); }
+.stage.split > .viewport, .stage.split > .holo-front { right: var(--dock); }
+.stage.split > .tools { right: calc(var(--dock) + 8px); }
+.stage.split > .filecard { max-width: calc(100% - var(--dock) - 290px); }
+.sidedit { position: absolute; top: 0; right: 0; bottom: 0; width: var(--dock); z-index: 5; display: flex; flex-direction: column; background: rgba(9,12,26,.97); border-left: 2px solid #5cf2ff; box-shadow: -12px 0 40px rgba(25,230,255,.18); animation: dock-in .22s ease-out; }
+.sidedit .tph { cursor: default; }
+.sidedit .tph .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-family: var(--mono); }
+@keyframes dock-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sidedit { animation: none; } }
+.stage.holo .holo-hud { max-width: calc(100% - 340px); }
+.stage.holo .holo-hud ul { justify-content: flex-end; }

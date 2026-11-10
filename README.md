@@ -81,6 +81,22 @@ https://github.com/dharaneechinnu/codeville/releases/latest/download/Codeville-S
 To build the installer without releasing, run the Release workflow by hand from the Actions tab; the installer is kept
 with the run for 14 days.
 
+## Hand control
+
+The hand button in the Build view turns the town into a full-window hologram and tracks your hand with the camera
+(MediaPipe, on this computer; the picture is never shown or sent anywhere). Esc or the same button leaves it.
+
+| Gesture | What it does |
+|---|---|
+| Point (one finger) | Aims a cursor at the fingertip; the block under it lights up and shows its file name. |
+| Pinch while pointing | Opens that block's file in the editor docked on the right, with the AI prompt under it. |
+| Open hand | Turns and tilts the town. |
+| Two open hands | Zoom. |
+| Fist | Holds still. |
+| Double pinch (without pointing) | Resets the view. |
+
+The rules live in `src/renderer/gesture.ts` and are checked without a camera by `npm run test:gestures`.
+
 ## Project analysis agent
 
 When you import a project, an analysis agent (`backend/visualizer/analysis`) runs six tools in order and reports each
@@ -90,6 +106,9 @@ services (from package files, `.env` examples and docker-compose), how many file
 It then traces how the buildings connect (`find_connections`): imports between files, frontend calls matched to the
 backend routes they hit, files that talk to the database, and files that use an outside service. The town draws these
 as links with small packets moving along them (Links: main, all or off); click a building to see only its links.
+It also keeps the links between single files (`fileLinks` in the report: which file imports, calls, stores through or
+tests which). Point at a block to see its file name; select it and the town draws a wire to every block that file is
+linked to, and the panel lists those files as buttons that jump to them.
 It also finds the project's own test, lint, type check and build commands and the folder each runs in (`find_commands`:
 for example pytest from `backend`, `npm run build` from `frontend`), and lists the test cases written in the test files
 (`find_tests`). The Test view builds its play buttons from these and shows the cases before a run. When a run stops

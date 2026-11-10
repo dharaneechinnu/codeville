@@ -147,8 +147,38 @@ interface FileBody {
   truncated: boolean;
 }
 
+/** The floating editor window. While the editor is docked beside the town, the dock shows it instead. */
 export function EditorPopup(): JSX.Element | null {
-  const { editorOpen, setEditorOpen, editorFile, root, editorAsk } = useCv();
+  const { editorOpen, setEditorOpen, editorFile, editorDocked } = useCv();
+  if (!editorOpen || editorDocked) return null;
+  return (
+    <Popup title={editorFile ?? 'Editor'} onClose={() => setEditorOpen(false)} className="editor" initial={{ top: 90, right: 40 }}>
+      <EditorBody />
+    </Popup>
+  );
+}
+
+/** The editor fixed to the right of the town: what a pinch on a block opens during hand control. */
+export function EditorDock(): JSX.Element {
+  const { editorFile, setEditorOpen, setEditorDocked } = useCv();
+  const name = editorFile?.split('/').pop() ?? 'Editor';
+  return (
+    <aside className="sidedit" aria-label={`Editor: ${editorFile ?? 'no file'}`}>
+      <div className="tph">
+        <b title={editorFile ?? ''}>{name}</b>
+        <span className="mut small path">{editorFile?.split('/').slice(0, -1).join('/')}</span>
+        <span className="sp" />
+        <button onClick={() => setEditorDocked(false)} title="Show the editor as a floating window">Float</button>
+        <button className="ib" onClick={() => setEditorOpen(false)} aria-label="Close the editor" title="Close"><Ico name="close" size={14} /></button>
+      </div>
+      <div className="tpb"><EditorBody /></div>
+    </aside>
+  );
+}
+
+/** A file's contents with the AI prompt under it, and the review of a proposed change. */
+function EditorBody(): JSX.Element {
+  const { editorOpen, editorFile, root, editorAsk } = useCv();
   const [body, setBody] = useState<FileBody | null>(null);
   const [err, setErr] = useState('');
   const [proposal, setProposal] = useState<AIEdit | null>(null);
@@ -181,10 +211,9 @@ export function EditorPopup(): JSX.Element | null {
     };
   }, [editorOpen, editorFile, root, reload]);
 
-  if (!editorOpen) return null;
   const lines = body ? body.text.split(/\r?\n/) : [];
   return (
-    <Popup title={editorFile ?? 'Editor'} onClose={() => setEditorOpen(false)} className="editor" initial={{ top: 90, right: 40 }}>
+    <>
       {!editorFile && <p className="mut pad">Pick a file in Files, Source control or the town to see it here.</p>}
       {err && (
         <div className="cc err pad">
@@ -228,7 +257,7 @@ export function EditorPopup(): JSX.Element | null {
           <AIBar root={root} file={editorFile} focusKey={focus} onProposal={setProposal} />
         </div>
       )}
-    </Popup>
+    </>
   );
 }
 

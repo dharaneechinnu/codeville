@@ -5,6 +5,7 @@ import { TestStage, type StageStep } from './teststage.js';
 import { Ico } from './icons.js';
 import type { Analysis, LinkKind } from '../shared/types.js';
 import { GestureLayer } from './gesturelayer.js';
+import { EditorDock } from './popups.js';
 import { LAYER_COLOR, LINK_COLOR, Town, type LinkMode, type Pick } from './town.js';
 
 const OPEN_ICON = (
@@ -40,8 +41,38 @@ function buildingOfPath(a: Analysis, path: string): string | null {
   return null;
 }
 
-/** How one building is wired to the rest: who it calls, what it stores, which services it uses, what it imports. */
-function Connections({ a, id }: { a: Analysis; id: string }): JSX.Element | null {
+/** How one file (one block) is wired to other files. Each name is a button that jumps to that block. */
+function FileLinks({ a, path, onGo }: { a: Analysis; path: string; onGo: (path: string) => void }): JSX.Element {
+  const links = a.fileLinks ?? [];
+  const out = (k: LinkKind): string[] => links.filter((e) => e.from === path && e.kind === k).map((e) => e.to);
+  const into = (k: LinkKind): string[] => links.filter((e) => e.to === path && e.kind === k).map((e) => e.from);
+  const rows: [string, LinkKind, string[]][] = [
+    ['Imports', 'imports', out('imports')], ['Imported by', 'imports', into('imports')],
+    ['Calls', 'calls', out('calls')], ['Called by', 'calls', into('calls')],
+    ['Stores in', 'stores', out('stores')], ['Stored here by', 'stores', into('stores')],
+    ['Covers', 'tests', out('tests')], ['Tested by', 'tests', into('tests')],
+  ];
+  const shown = rows.filter(([, , v]) => v.length);
+  return (
+    <>
+      <b>{path.split('/').pop()}</b>
+      {shown.length === 0 && <p className="mut small">No links found from this file to other files.</p>}
+      {shown.map(([label, kind, files]) => (
+        <div key={label} className="crow2">
+          <span style={{ color: LINK_COLOR[kind] }}>{label}</span>
+          <span className="tags">
+            {files.slice(0, 8).map((f) => <button key={f} className="tag go" title={`Go to ${f}`} onClick={() => onGo(f)}>{f.split('/').pop()}</button>)}
+            {files.length > 8 && <span className="tag">+{files.length - 8}</span>}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** How one building is wired to the rest: who it calls, what it stores, which services it uses, what it imports.
+ * When a file is selected, its own file-to-file links come first. */
+function Connections({ a, id, path, onGo }: { a: Analysis; id: string; path: string | null; onGo: (path: string) => void }): JSX.Element | null {
   const out = (k: LinkKind): string[] => a.connections.filter((e) => e.from === id && e.kind === k).map((e) => nameOf(a, e.to));
   const into = (k: LinkKind): string[] => a.connections.filter((e) => e.to === id && e.kind === k).map((e) => nameOf(a, e.from));
   const rows: [string, LinkKind, string[]][] = [
@@ -54,7 +85,9 @@ function Connections({ a, id }: { a: Analysis; id: string }): JSX.Element | null
   const shown = rows.filter(([, , v]) => v.length);
   return (
     <div className="conn" role="region" aria-label="Connections">
-      <b>{nameOf(a, id)}</b>
+      {path && <FileLinks a={a} path={path} onGo={onGo} />}
+      {path && <hr />}
+      <b>{path ? <span className="mut">Building · </span> : null}{nameOf(a, id)}</b>
       {shown.length === 0 && <p className="mut small">Nothing detected linking to this building.</p>}
       {shown.map(([label, kind, names]) => (
         <div key={label} className="crow2">
@@ -198,7 +231,7 @@ export function VizWidget(): JSX.Element {
 }
 
 function BuildView(): JSX.Element {
-  const { analysis, townRef, select, openEditor, selected } = useCv();
+  const { analysis, townRef, select, openEditor, selected, editorOpen, editorDocked, setEditorDocked } = useCv();
   const host = useRef<HTMLDivElement>(null);
   const [webgl, setWebgl] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -237,13 +270,21 @@ function BuildView(): JSX.Element {
     townRef.current?.setLinkMode(mode);
   }, [mode, townRef]);
 
+  // The docked editor belongs to hand control: leaving it (or this tab) turns the editor back into a floating window.
+  useEffect(() => {
+    if (!hands) setEditorDocked(false);
+  }, [hands, setEditorDocked]);
+  useEffect(() => () => setEditorDocked(false), [setEditorDocked]);
+
   const t = (): Town | null => townRef.current;
   const shown = selected ?? pick?.path ?? null;
+  const docked = hands && editorOpen && editorDocked;
 
   return (
-    <div className={`stage${hands ? ' holo' : ''}`}>
+    <div className={`stage${hands ? ' holo' : ''}${docked ? ' split' : ''}`}>
       <div className="viewport" ref={host} />
-      {hands && <GestureLayer getTown={() => townRef.current} onClose={() => setHands(false)} />}
+      {hands && <GestureLayer getTown={() => townRef.current} onClose={() => setHands(false)} onOpen={(path) => openEditor(path, { dock: true })} />}
+      {docked && <EditorDock />}
       {!webgl && <div className="nogl">This computer cannot draw the 3D town. The Test view and the lists still work.</div>}
       <div className="tools" role="toolbar" aria-label="View controls">
         <button onClick={() => t()?.rotate(-Math.PI / 4)} title="Rotate left" aria-label="Rotate left"><Ico name="rotateLeft" /></button>
@@ -254,7 +295,7 @@ function BuildView(): JSX.Element {
         <button onClick={() => t()?.zoom(1.25)} title="Zoom out" aria-label="Zoom out"><Ico name="minus" /></button>
         <button onClick={() => t()?.overview()} title="Reset the view" aria-label="Reset the view"><Ico name="home" /></button>
         <button onClick={() => t()?.wholeProject()} title="See the whole project from above" aria-label="Whole project"><Ico name="whole" /></button>
-        <button className={hands ? 'on' : ''} onClick={() => setHands(!hands)} title="Hand control: move and zoom the town with your hand in front of the camera" aria-label="Hand control" aria-pressed={hands}><Ico name="hand" /></button>
+        <button className={hands ? 'on' : ''} onClick={() => setHands(!hands)} title={hands ? 'Leave hand control (Esc)' : 'Hand control: turn the town, point at a block and pinch to open its file, with your hand in front of the camera'} aria-label="Hand control" aria-pressed={hands}><Ico name="hand" />{hands && <em>exit</em>}</button>
         <button className="modebtn" onClick={() => setMode(NEXT_MODE[mode])} title={`${MODE_NAME[mode]}. Click to change: main links, all links, or none.`} aria-label={MODE_NAME[mode]}><Ico name="links" /><em>{mode}</em></button>
       </div>
       {shown && (
@@ -271,7 +312,15 @@ function BuildView(): JSX.Element {
       {!analysis && <div className="nogl">Open a project to build its town.</div>}
       {analysis && (pick?.buildingId || shown) && (
         <div className="connwrap" style={{ top: shown ? 60 : 8 }}>
-          <Connections a={analysis} id={pick?.buildingId ?? buildingOfPath(analysis, shown ?? '') ?? ''} />
+          <Connections
+            a={analysis}
+            id={(shown ? buildingOfPath(analysis, shown) : null) ?? pick?.buildingId ?? ''}
+            path={shown}
+            onGo={(p) => {
+              setPick(null);
+              select(p);
+            }}
+          />
         </div>
       )}
       <About />

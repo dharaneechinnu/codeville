@@ -111,6 +111,22 @@ def test_the_agent_traces_how_buildings_connect(wired):
     assert not any(f.startswith("database:") or f == t for f, t, _ in links)
 
 
+def test_the_agent_traces_how_single_files_connect(wired):
+    a = run_analysis(str(wired))
+    links = {(e["from"], e["to"], e["kind"]) for e in a["fileLinks"]}
+    api, service, model = "backend/app/api/matters.py", "backend/app/services/matters.py", "backend/app/models/matter.py"
+    page = "frontend/src/features/matters/MatterList.tsx"
+    # a file imports another file, and a file that uses a model stores data through it
+    assert (api, service, "imports") in links and (service, model, "stores") in links
+    # the page that fetches /api/matters calls the file that defines that route
+    assert (page, api, "calls") in links
+    # a test file covers the file it imports
+    assert ("backend/tests/test_matters.py", service, "tests") in links
+    # both ends are always files of the project, and no file links to itself
+    known = {f["path"] for feat in a["features"] for f in feat["files"]}
+    assert all(f in known and t in known and f != t for f, t, _ in links)
+
+
 def test_the_connections_tool_is_available_to_agents(auth, wired):
     r = auth.post("/api/tools/find_connections", {"path": str(wired)}, format="json")
     assert r.status_code == 200 and r.json()["total"] > 0 and r.json()["links"][0].keys() >= {"from", "to", "kind", "weight"}

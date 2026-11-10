@@ -45,8 +45,12 @@ interface Ctx {
   selected: string | null;
   select: (path: string | null) => void;
   editorFile: string | null;
-  /** Opens a file in the editor; with { ai: true } the AI prompt is focused, ready to type. */
-  openEditor: (path: string, opts?: { ai?: boolean }) => void;
+  /** Opens a file in the editor; with { ai: true } the AI prompt is focused, ready to type. { dock: true } opens it
+   * fixed to the right of the town instead of as a floating window; without `dock` the editor stays where it is. */
+  openEditor: (path: string, opts?: { ai?: boolean; dock?: boolean }) => void;
+  /** The editor is fixed to the right of the town (hand control) instead of floating. */
+  editorDocked: boolean;
+  setEditorDocked: (v: boolean) => void;
   /** Goes up each time the editor is opened for an AI edit. */
   editorAsk: number;
   terminalOpen: boolean;
@@ -105,6 +109,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [editorAsk, setEditorAsk] = useState(0);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDocked, setEditorDocked] = useState(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [agentRun, setAgentRun] = useState<string | null>(null);
 
@@ -247,14 +252,15 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
     townRef.current?.select(path);
   }, []);
 
-  const openEditor = useCallback((path: string, opts?: { ai?: boolean }) => {
+  const openEditor = useCallback((path: string, opts?: { ai?: boolean; dock?: boolean }) => {
     setEditorFile(path);
     setEditorOpen(true);
+    if (opts?.dock !== undefined) setEditorDocked(opts.dock);
     if (opts?.ai) setEditorAsk((n) => n + 1);
   }, []);
 
   const value: Ctx = {
-    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk,
+    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk, editorDocked, setEditorDocked,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
     sendPrompt, agentLines, agentRunning, stopAgent,
   };

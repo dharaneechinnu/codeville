@@ -3,7 +3,11 @@ import { GestureInterpreter, HandTracker, type GestureMode, type Hand } from './
 import { HandView } from './handview.js';
 import type { Town } from './town.js';
 
+const AIM_FAT = 16; // pixels around the fingertip that still count as on a block
+
 const STEPS: [GestureMode, string, string][] = [
+  ['point', 'Point', 'aim'],
+  ['point', 'Pinch', 'open file'],
   ['rotate', 'Open hand', 'turn'],
   ['zoom', 'Two hands', 'zoom'],
   ['hold', 'Fist', 'hold'],
@@ -13,9 +17,13 @@ const STEPS: [GestureMode, string, string][] = [
 /**
  * Hand control with a hologram look: the town turns see-through and the tracked hands are drawn over it. The camera
  * only feeds the hand tracker; its picture is never shown. Open hand turns the town, two open hands zoom, a fist
- * holds, a double pinch resets.
+ * holds, a double pinch resets. One pointing finger aims at a block, and a pinch then opens that block's file.
  */
-export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null; onClose: () => void }): JSX.Element {
+export function GestureLayer({ getTown, onClose, onOpen }: { getTown: () => Town | null; onClose: () => void; onOpen: (path: string) => void }): JSX.Element {
+  const open = useRef(onOpen);
+  open.current = onOpen;
+  const close = useRef(onClose);
+  close.current = onClose;
   const overlay = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState<'starting' | 'on' | 'error'>('starting');
   const [error, setError] = useState('');
@@ -26,6 +34,7 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
     town?.setHologram(true);
     const interp = new GestureInterpreter();
     let shown: GestureMode = 'idle';
+    let aiming = false;
     const view = new HandView();
     const tracker = new HandTracker({
       onError: (m) => {
@@ -40,6 +49,21 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
           if (f.tilt) t.tilt(f.tilt);
           if (f.zoom !== 1) t.zoom(f.zoom);
           if (f.reset) t.overview();
+          if (f.cursor) {
+            // The cursor sits on the drawn fingertip, so what the finger touches on screen is what gets picked.
+            const s = toScreen(f.cursor);
+            const box = overlay.current?.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const x = (box?.left ?? 0) + s.x / dpr, y = (box?.top ?? 0) + s.y / dpr;
+            const hit = f.click ? t.pickAt(x, y, AIM_FAT) : t.hoverAt(x, y, AIM_FAT);
+            if (f.click && hit?.path) open.current(hit.path);
+            view.aim(s, !!hit?.path, f.click, now);
+            aiming = true;
+          } else if (aiming) {
+            aiming = false;
+            t.clearHover();
+            view.aim(null, false, false, now);
+          }
         }
         if (f.mode !== shown) {
           shown = f.mode;
@@ -83,10 +107,18 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
         setState('error');
       });
 
+    // Escape leaves hand control, unless the key is being used in a text box.
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !(e.target as HTMLElement | null)?.closest?.('input, textarea')) close.current();
+    };
+    window.addEventListener('keydown', onKey);
+
     return () => {
       tracker.stop();
       cancelAnimationFrame(raf);
       video.remove();
+      window.removeEventListener('keydown', onKey);
+      getTown()?.clearHover();
       getTown()?.setHologram(false);
     };
     // The camera starts once when hand control is switched on.
@@ -109,7 +141,7 @@ export function GestureLayer({ getTown, onClose }: { getTown: () => Town | null;
             <b>HAND CONTROL{mode === 'idle' ? ' · show your hand' : ''}</b>
             <ul>
               {STEPS.map(([m, hand, does]) => (
-                <li key={m} className={mode === m ? 'on' : ''}>{hand} <em>{does}</em></li>
+                <li key={hand} className={mode === m ? 'on' : ''}>{hand} <em>{does}</em></li>
               ))}
             </ul>
           </>

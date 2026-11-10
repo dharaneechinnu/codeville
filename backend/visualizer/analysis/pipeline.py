@@ -9,7 +9,7 @@ from typing import Callable, Optional
 
 from . import steps
 from .commands import find_commands, find_tests
-from .connections import find_connections
+from .connections import trace
 
 Emit = Optional[Callable[[dict], None]]
 
@@ -49,7 +49,7 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
     stack = step("detect_stack", lambda: steps.detect_stack(root, files), lambda r: ", ".join([*r["frontend"], *r["backend"], *r["database"]][:6]) or "nothing recognised")
     layers = step("classify_layers", lambda: steps.classify_layers(files, stack), lambda r: f"{r['frontend']} frontend, {r['backend']} backend, {r['database']} database, {r['tests']} tests")
     features = step("find_features", lambda: steps.find_features(files), lambda r: f"{sum(1 for f in r if f['kind'] == 'feature')} features")
-    connections = step("find_connections", lambda: find_connections(root, features), lambda r: f"{len(r)} links")
+    connections, file_links = step("find_connections", lambda: trace(root, features), lambda r: f"{len(r[0])} links between buildings, {len(r[1])} between files")
     commands = step("find_commands", lambda: find_commands(root), lambda r: f"{sum(1 for c in r if c['kind'] == 'test')} test commands, {len(r)} in all")
     tests = step("find_tests", lambda: find_tests(root, files, commands), lambda r: f"{len(r)} test cases in {len({t['file'] for t in r})} files")
     summary = step("summarize", lambda: steps.summarize(stack, layers, features), lambda r: r["kind"])
@@ -65,6 +65,7 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
         "layers": layers,
         "features": features,
         "connections": connections,
+        "fileLinks": file_links,
         "commands": commands,
         "tests": tests,
         "totalFiles": len(files),

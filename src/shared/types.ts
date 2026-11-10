@@ -46,6 +46,13 @@ export interface Connection {
   weight: number;
 }
 
+/** One link between two single files (two blocks of the town). Both ends are file paths. */
+export interface FileLink {
+  from: string;
+  to: string;
+  kind: LinkKind;
+}
+
 /** A command the project itself uses to test, lint, type check or build, and the folder it runs in ('' for the project folder). */
 export interface RunCommand {
   id: string;
@@ -75,6 +82,8 @@ export interface Analysis {
   layers: Record<Layer, number>;
   features: Feature[];
   connections: Connection[];
+  /** Links between single files. Missing when an older backend answers. */
+  fileLinks?: FileLink[];
   commands: RunCommand[];
   tests: TestCase[];
   totalFiles: number;

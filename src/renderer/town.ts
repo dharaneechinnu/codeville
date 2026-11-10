@@ -1,6 +1,6 @@
 ﻿import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { Analysis, Connection, Feature, Layer, LinkKind } from '../shared/types.js';
+import type { Analysis, Connection, Feature, FileLink, Layer, LinkKind } from '../shared/types.js';
 import type { CvEvent } from '../shared/events.js';
 
 /** Every block is colored by the layer its file belongs to, so one building shows how a feature is built. */
@@ -39,6 +39,18 @@ interface Floor {
   mesh: THREE.Mesh;
   path: string;
   isNew: boolean;
+  /** A failed test or check points at this file. */
+  bad?: boolean;
+  /** How this block is linked to the selected block, when it is. */
+  rel?: LinkKind;
+}
+
+/** A wire between two blocks: drawn only for the selected block, with a packet moving the way the link points. */
+interface Wire {
+  curve: THREE.QuadraticBezierCurve3;
+  line: THREE.Mesh;
+  packet: THREE.Mesh;
+  phase: number;
 }
 
 /** One feature, laid out as a small district: a pad with its own label and one separate building per layer. */
@@ -95,6 +107,13 @@ export class Town {
   private down = { x: 0, y: 0 };
   private onPick: (p: Pick | null) => void = () => undefined;
   private selected: Floor | null = null;
+  private hovered: Floor | null = null;
+  private fileLinks: FileLink[] = [];
+  private floorByPath = new Map<string, { b: Building; floor: Floor }>();
+  private meshes: THREE.Mesh[] = [];
+  private wires: Wire[] = [];
+  private wireGroup = new THREE.Group();
+  private tip: HTMLDivElement;
   private center = new THREE.Vector3();
   private extent = 16;
   private holo = false;
@@ -118,6 +137,11 @@ export class Town {
     sun.position.set(18, 30, 12);
     this.scene.add(sun);
     this.scene.add(this.linkGroup);
+    this.scene.add(this.wireGroup);
+    this.tip = document.createElement('div');
+    this.tip.className = 'cv-tip';
+    this.tip.style.display = 'none';
+    this.labels.appendChild(this.tip);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -129,8 +153,12 @@ export class Town {
     const dom = this.renderer.domElement;
     dom.addEventListener('pointerdown', (e) => (this.down = { x: e.clientX, y: e.clientY }));
     dom.addEventListener('pointerup', (e) => {
-      if (Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5) this.pick(e);
+      if (Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) < 5) this.pickAt(e.clientX, e.clientY);
     });
+    dom.addEventListener('pointermove', (e) => {
+      if (e.buttons === 0) this.hoverAt(e.clientX, e.clientY);
+    });
+    dom.addEventListener('pointerleave', () => this.clearHover());
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -150,10 +178,16 @@ export class Town {
       d.label.remove();
     }
     this.clearLinks();
+    this.clearWires();
     this.districts = [];
     this.buildings.clear();
+    this.floorByPath.clear();
+    this.meshes = [];
+    this.fileLinks = a?.fileLinks ?? [];
     this.pulses = [];
     this.selected = null;
+    this.hovered = null;
+    this.tip.style.display = 'none';
     for (const child of [...this.scene.children]) if (child.userData.ground) this.scene.remove(child);
 
     const all = a?.features ?? [];
@@ -357,6 +391,8 @@ export class Town {
     mesh.userData.building = b;
     b.group.add(mesh);
     b.floors.push(floor);
+    this.meshes.push(mesh);
+    if (path) this.floorByPath.set(path, { b, floor });
     return floor;
   }
 
@@ -390,7 +426,10 @@ export class Town {
     b.failed = failed;
     b.fire.visible = failed;
     b.district.label.classList.toggle('bad', b.district.buildings.some((x) => x.failed));
-    for (const f of b.floors) (f.mesh.material as THREE.MeshStandardMaterial).emissive.set(failed && (!floor || f === floor) ? '#7a0f1a' : '#000000');
+    for (const f of b.floors) {
+      f.bad = failed && (!floor || f === floor);
+      this.paint(f);
+    }
     if (failed) b.fire.position.y = b.floors.length * b.fh + 0.6;
   }
 
@@ -438,8 +477,11 @@ export class Town {
   }
 
   select(path: string | null): void {
-    if (this.selected) this.selected.mesh.scale.set(1, 1, 1);
+    const old = this.selected;
+    if (old) old.mesh.scale.set(1, 1, 1);
     this.selected = null;
+    this.clearWires();
+    if (old) this.paint(old);
     if (!path) {
       this.focusBuilding(null);
       return;
@@ -448,33 +490,131 @@ export class Town {
     if (hit) {
       this.selected = hit.floor;
       hit.floor.mesh.scale.set(1.12, 1, 1.12);
+      this.paint(hit.floor);
       this.focusBuilding(hit.b.feature.id);
+      this.buildWires(hit.floor);
     }
   }
 
-  private pick(e: PointerEvent): void {
+  // ------------------------------------------------------------------------------------------ block wires
+
+  private clearWires(): void {
+    for (const w of this.wires) {
+      this.wireGroup.remove(w.line, w.packet);
+      w.line.geometry.dispose();
+      (w.line.material as THREE.Material).dispose();
+      w.packet.geometry.dispose();
+      (w.packet.material as THREE.Material).dispose();
+    }
+    this.wires = [];
+    for (const { floor } of this.floorByPath.values()) {
+      if (floor.rel) {
+        floor.rel = undefined;
+        this.paint(floor);
+      }
+    }
+  }
+
+  /** Draws a wire from the selected block to every block its file is linked to, and lights those blocks. */
+  private buildWires(sel: Floor): void {
+    this.scene.updateMatrixWorld();
+    const at = (f: Floor): THREE.Vector3 => f.mesh.getWorldPosition(new THREE.Vector3());
+    for (const l of this.fileLinks) {
+      if (l.from !== sel.path && l.to !== sel.path) continue;
+      const from = this.floorByPath.get(l.from);
+      const to = this.floorByPath.get(l.to);
+      if (!from || !to) continue;
+      const a = at(from.floor);
+      const c = at(to.floor);
+      const mid = a.clone().add(c).multiplyScalar(0.5);
+      const flat = Math.hypot(a.x - c.x, a.z - c.z);
+      // Two blocks of the same tower: bow the wire out of the front. Otherwise arc it over the roofs.
+      if (flat < 0.5) mid.z += from.b.width / 2 + 1.1 + Math.abs(a.y - c.y) * 0.25;
+      else mid.y = Math.max(a.y, c.y) + 1.4 + flat * 0.28;
+      const curve = new THREE.QuadraticBezierCurve3(a, mid, c);
+      const color = LINK_COLOR[l.kind];
+      const line = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.04, 5, false), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 }));
+      const packet = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+      this.wireGroup.add(line, packet);
+      this.wires.push({ curve, line, packet, phase: Math.random() });
+      const other = l.from === sel.path ? to.floor : from.floor;
+      other.rel = l.kind;
+      this.paint(other);
+    }
+  }
+
+  /** One place decides a block's glow, so hover, selection, links and failures never fight over it. */
+  private paint(f: Floor): void {
+    const mat = f.mesh.material as THREE.MeshStandardMaterial;
+    if (f === this.hovered) mat.emissive.set('#1f7f92');
+    else if (f.bad) mat.emissive.set('#7a0f1a');
+    else if (f === this.selected) mat.emissive.set('#3b4170');
+    else if (f.rel) mat.emissive.set(LINK_COLOR[f.rel]).multiplyScalar(0.4);
+    else mat.emissive.set('#000000');
+  }
+
+  // ------------------------------------------------------------------------------------------ pointing
+
+  /** The block under a point of the window. `fat` (pixels) also tries a ring around the point, for a hand that cannot aim to the pixel. */
+  private floorAt(clientX: number, clientY: number, fat = 0): THREE.Mesh | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
     const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, this.camera);
-    const meshes = [...this.buildings.values()].flatMap((b) => b.floors.map((f) => f.mesh));
-    const hit = ray.intersectObjects(meshes, false)[0];
-    if (!hit) {
+    const spots: [number, number][] = [[0, 0]];
+    for (let k = 0; fat > 0 && k < 8; k++) spots.push([Math.cos((k * Math.PI) / 4) * fat, Math.sin((k * Math.PI) / 4) * fat]);
+    for (const [dx, dy] of spots) {
+      const ndc = new THREE.Vector2(((clientX + dx - rect.left) / rect.width) * 2 - 1, -((clientY + dy - rect.top) / rect.height) * 2 + 1);
+      ray.setFromCamera(ndc, this.camera);
+      const hit = ray.intersectObjects(this.meshes, false)[0];
+      if (hit) return hit.object as THREE.Mesh;
+    }
+    return null;
+  }
+
+  private pickOf(mesh: THREE.Mesh): Pick {
+    const floor = mesh.userData.floor as Floor;
+    const b = mesh.userData.building as Building;
+    return { buildingId: b.feature.id, featureId: b.district.id, featureName: b.district.name, path: floor.path };
+  }
+
+  /** Lights the block under a point and shows its file name. Used by the mouse and by the pointing hand. */
+  hoverAt(clientX: number, clientY: number, fat = 0): Pick | null {
+    const mesh = this.floorAt(clientX, clientY, fat);
+    const floor = (mesh?.userData.floor as Floor | undefined) ?? null;
+    if (floor !== this.hovered) {
+      const old = this.hovered;
+      this.hovered = floor;
+      if (old) this.paint(old);
+      if (floor) this.paint(floor);
+      const b = mesh?.userData.building as Building | undefined;
+      const name = floor?.path ? floor.path.split('/').pop()! : (b?.district.name ?? '');
+      this.tip.textContent = name;
+      this.tip.style.display = floor ? 'block' : 'none';
+    }
+    return mesh ? this.pickOf(mesh) : null;
+  }
+
+  clearHover(): void {
+    const old = this.hovered;
+    this.hovered = null;
+    if (old) this.paint(old);
+    this.tip.style.display = 'none';
+  }
+
+  /** Selects the block under a point, the same as a mouse click there. */
+  pickAt(clientX: number, clientY: number, fat = 0): Pick | null {
+    const mesh = this.floorAt(clientX, clientY, fat);
+    if (!mesh) {
       this.select(null);
       this.onPick(null);
-      return;
+      return null;
     }
-    const floor = hit.object.userData.floor as Floor;
-    const b = hit.object.userData.building as Building;
-    if (!floor.path) {
-      // An outside service has no file to open, but it has links to show.
-      this.select(null);
-      this.focusBuilding(b.feature.id);
-      this.onPick({ buildingId: b.feature.id, featureId: b.district.id, featureName: b.district.name, path: '' });
-      return;
-    }
-    this.select(floor.path);
-    this.onPick({ buildingId: b.feature.id, featureId: b.district.id, featureName: b.district.name, path: floor.path });
+    const p = this.pickOf(mesh);
+    // An outside service has no file to open, but it has links to show.
+    this.select(p.path || null);
+    if (!p.path) this.focusBuilding(p.buildingId);
+    this.onPick(p);
+    return p;
   }
 
   // View controls: the same moves a person makes with the mouse, as buttons.
@@ -518,7 +658,7 @@ export class Town {
       const t = (now - p.start) / 900;
       const mat = p.floor.mesh.material as THREE.MeshStandardMaterial;
       if (t >= 1) {
-        mat.emissive.set(p.floor.mesh.userData.building?.failed ? '#7a0f1a' : '#000000');
+        this.paint(p.floor);
         return false;
       }
       mat.emissive.set('#ffffff').multiplyScalar(0.55 * (1 - t));
@@ -532,7 +672,12 @@ export class Town {
       });
     }
     for (const l of this.links) if (l.visible) l.packet.position.copy(l.curve.getPoint((now / 1700 + l.phase) % 1));
+    for (const w of this.wires) w.packet.position.copy(w.curve.getPoint((now / 1300 + w.phase) % 1));
     const rect = this.host.getBoundingClientRect();
+    if (this.hovered) {
+      const v = this.hovered.mesh.getWorldPosition(new THREE.Vector3()).project(this.camera);
+      this.tip.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(14px, -130%)`;
+    }
     for (const d of this.districts) {
       const top = Math.max(0.5, ...d.buildings.map((b) => b.floors.length * b.fh));
       const v = new THREE.Vector3(d.x, top + 1.4, d.z).project(this.camera);
