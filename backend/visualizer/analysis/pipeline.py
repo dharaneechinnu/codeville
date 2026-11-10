@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from . import steps
 from .commands import find_commands, find_tests
 from .connections import trace
+from .templates import match_template
 
 Emit = Optional[Callable[[dict], None]]
 
@@ -19,6 +20,7 @@ STEP_LABELS = [
     ("detect_stack", "Detecting frameworks, database and services"),
     ("classify_layers", "Sorting files into frontend, backend, database and tests"),
     ("find_features", "Finding features"),
+    ("match_template", "Matching a known kind of app and its user flow"),
     ("find_connections", "Tracing how the pieces connect"),
     ("find_commands", "Finding how to run tests, lint and build"),
     ("find_tests", "Listing the test cases"),
@@ -49,6 +51,7 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
     stack = step("detect_stack", lambda: steps.detect_stack(root, files), lambda r: ", ".join([*r["frontend"], *r["backend"], *r["database"]][:6]) or "nothing recognised")
     layers = step("classify_layers", lambda: steps.classify_layers(files, stack), lambda r: f"{r['frontend']} frontend, {r['backend']} backend, {r['database']} database, {r['tests']} tests")
     features = step("find_features", lambda: steps.find_features(files), lambda r: f"{sum(1 for f in r if f['kind'] == 'feature')} features")
+    flow = step("match_template", lambda: match_template(features), lambda r: f"{r['template']['name']}: {r['found']} of {r['total']} steps found")
     connections, file_links = step("find_connections", lambda: trace(root, features), lambda r: f"{len(r[0])} links between buildings, {len(r[1])} between files")
     commands = step("find_commands", lambda: find_commands(root), lambda r: f"{sum(1 for c in r if c['kind'] == 'test')} test commands, {len(r)} in all")
     tests = step("find_tests", lambda: find_tests(root, files, commands), lambda r: f"{len(r)} test cases in {len({t['file'] for t in r})} files")
@@ -64,6 +67,7 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
         "stack": stack,
         "layers": layers,
         "features": features,
+        "flow": flow,
         "connections": connections,
         "fileLinks": file_links,
         "commands": commands,

@@ -412,3 +412,40 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 @media (prefers-reduced-motion: reduce) { .sidedit { animation: none; } }
 .stage.holo .holo-hud { max-width: calc(100% - 340px); }
 .stage.holo .holo-hud ul { justify-content: flex-end; }
+
+/* Flow: the kind of app, its steps in order, and the files behind each step */
+.cv-label.step { border-color: var(--accent); color: #d8fcff; }
+.flowview { flex: 1; min-height: 0; overflow: auto; padding: 12px 12px 12px 20px; display: flex; flex-direction: column; gap: 12px; }
+.flhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; border: 2px solid var(--line); background: var(--bg); padding: 10px 12px; }
+.flhead div { display: flex; flex-direction: column; }
+.flhead div b { font: 700 20px var(--mono); color: var(--accent); }
+.flhead p { flex: 1; min-width: 200px; margin: 0; font-size: 14px; }
+.flsteps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 22px; }
+.flsteps li { position: relative; display: flex; }
+.flsteps li + li::before { content: '→'; position: absolute; left: -17px; top: 50%; transform: translateY(-50%); color: var(--accent); font: 700 14px var(--mono); }
+.flstep { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 9px 10px; background: var(--panel); border: 2px solid var(--line); }
+.flstep:hover:not(:disabled) { border-color: var(--accent); }
+.flstep.on { border-color: var(--accent); background: #10233a; box-shadow: 4px 4px 0 rgba(0,0,0,.45); }
+.flstep > i { font: normal 700 10px var(--mono); color: #06101a; background: var(--accent); width: 18px; height: 18px; display: grid; place-items: center; }
+.flstep b { font: 700 13px var(--mono); }
+.flstep span { font-size: 12px; color: var(--muted); line-height: 1.35; flex: 1; }
+.flstep em { font: normal 11px var(--mono); display: flex; gap: 8px; }
+.flstep u { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.flstep u i { width: 9px; height: 9px; }
+.flstep.missing { border-style: dashed; background: transparent; cursor: default; }
+.flstep.missing > i { background: var(--line); color: var(--muted); }
+.flstep.missing b { color: var(--muted); }
+.flstep em.none { color: var(--warn); }
+.fldetail { border: 2px solid var(--accent); background: var(--bg); }
+.fldh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 7px 10px; border-bottom: 2px solid var(--line); }
+.fldh b { font: 700 13px var(--mono); }
+.flcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 10px; }
+.flcol { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.flcol h4 { margin: 0; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.flcol h4 i { width: 9px; height: 9px; }
+.flfile { display: flex; flex-direction: column; text-align: left; padding: 5px 8px; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+.flfile:hover { border-color: var(--accent); }
+.flfile b { font: 600 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flfile span { font: 10px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flnote { margin: 0; font-size: 13px; }
+.flnote b { font: 700 11px var(--mono); text-transform: uppercase; margin-right: 6px; }

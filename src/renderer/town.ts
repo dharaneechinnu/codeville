@@ -114,8 +114,10 @@ export class Town {
   private wires: Wire[] = [];
   private wireGroup = new THREE.Group();
   private tip: HTMLDivElement;
+  private flowDots: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; phase: number }[] = [];
   private center = new THREE.Vector3();
   private extent = 16;
+  private wide = false;
   private holo = false;
   private fog: THREE.Fog | null = null;
 
@@ -191,10 +193,21 @@ export class Town {
     for (const child of [...this.scene.children]) if (child.userData.ground) this.scene.remove(child);
 
     const all = a?.features ?? [];
-    const app = all.filter((f) => f.kind !== 'database');
+    // When the project matches a known kind of app, the districts stand in the order of its user flow and carry the step number.
+    const stepOf = new Map<string, number>();
+    if (a?.flow && a.flow.template.id !== 'general') {
+      a.flow.steps.forEach((s, i) => {
+        const main = s.features[0];
+        if (s.found && main && !stepOf.has(main)) stepOf.set(main, i + 1);
+      });
+    }
+    const app = all.filter((f) => f.kind !== 'database').sort((x, y) => (stepOf.get(x.id) ?? 99) - (stepOf.get(y.id) ?? 99));
+    this.flowDots = [];
     const db = all.find((f) => f.kind === 'database');
     const services = (a?.stack.services ?? []).slice(0, 8);
-    const cols = Math.max(1, Math.ceil(Math.sqrt(app.length * 1.3 || 1)));
+    // The steps of the flow stand side by side on one street, in order; everything else sits in the rows behind it.
+    const onStreet = app.filter((f) => stepOf.has(f.id)).length;
+    const cols = onStreet >= 2 ? onStreet : Math.max(1, Math.ceil(Math.sqrt(app.length * 1.3 || 1)));
     const rows = Math.ceil(app.length / cols) || 1;
     const xC = ((cols - 1) * DISTRICT_X) / 2;
     const zMin = db ? -DISTRICT_Z : 0;
@@ -202,6 +215,7 @@ export class Town {
     const w = Math.max(cols * DISTRICT_X, services.length * SERVICE_GAP) + 4;
     const d = zMax - zMin + DISTRICT_Z + 1;
     this.extent = Math.max(w, d) + 8;
+    this.wide = w > d * 1.6;
 
     const ground = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), new THREE.MeshStandardMaterial({ color: '#1a1b45', roughness: 1 }));
     ground.position.set(xC, -0.5, (zMin + zMax) / 2);
@@ -216,7 +230,8 @@ export class Town {
     const makeDistrict = (f: Feature, x: number, z: number, layers: Layer[], width: number, extra = '', service = false): void => {
       const group = new THREE.Group();
       group.position.set(x, 0, z);
-      const dist: District = { id: f.id, name: f.name, x, z, group, label: this.makeLabel(f.name, extra), buildings: [] };
+      const n = stepOf.get(f.id);
+      const dist: District = { id: f.id, name: f.name, x, z, group, label: this.makeLabel(n ? `${n} · ${f.name}` : f.name, n ? `${extra} step` : extra), buildings: [] };
       const step = service ? 0 : Math.max(BUILDING_STEP, width + 0.9);
       const pad = new THREE.Mesh(
         new THREE.BoxGeometry(service ? 3 : layers.length * step + 0.6, 0.18, service ? 3 : width + 1.8),
@@ -256,6 +271,23 @@ export class Town {
       const fake: Feature = { id: `svc-${name}`, name, kind: 'feature', path: '', files: [], layers: { frontend: 0, backend: 0, database: 0, tests: 0 } };
       makeDistrict(fake, xC + (i - (services.length - 1) / 2) * SERVICE_GAP, zMax, ['backend'], 1.8, 'svc', true);
     });
+
+    // The flow road: a lit strip on the ground from each step's district to the next, with a dot moving along it.
+    const stops = this.districts.filter((d) => stepOf.has(d.id)).sort((x, y) => stepOf.get(x.id)! - stepOf.get(y.id)!);
+    for (let i = 0; i + 1 < stops.length; i++) {
+      const from = new THREE.Vector3(stops[i]!.x, 0.04, stops[i]!.z + 2.6);
+      const to = new THREE.Vector3(stops[i + 1]!.x, 0.04, stops[i + 1]!.z + 2.6);
+      const len = from.distanceTo(to);
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.28), new THREE.MeshBasicMaterial({ color: '#19e6ff', transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+      road.rotation.x = -Math.PI / 2;
+      road.rotation.z = -Math.atan2(to.z - from.z, to.x - from.x);
+      road.position.copy(from).add(to).multiplyScalar(0.5);
+      road.userData.ground = true;
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+      dot.userData.ground = true;
+      this.scene.add(road, dot);
+      this.flowDots.push({ mesh: dot, from, to, phase: i * 0.17 });
+    }
 
     this.center.set(xC, 3, (zMin + zMax) / 2);
     this.buildLinks(a?.connections ?? []);
@@ -636,7 +668,9 @@ export class Town {
   }
   overview(): void {
     this.controls.target.copy(this.center);
-    this.camera.position.set(this.center.x + this.extent * 0.42, this.center.y + this.extent * 0.4, this.center.z + this.extent * 0.55);
+    // A long street is seen from the front so all of it fits; a square town from its corner.
+    if (this.wide) this.camera.position.set(this.center.x + this.extent * 0.1, this.center.y + this.extent * 0.48, this.center.z + this.extent * 0.85);
+    else this.camera.position.set(this.center.x + this.extent * 0.42, this.center.y + this.extent * 0.4, this.center.z + this.extent * 0.55);
   }
   wholeProject(): void {
     this.controls.target.copy(this.center);
@@ -672,6 +706,7 @@ export class Town {
       });
     }
     for (const l of this.links) if (l.visible) l.packet.position.copy(l.curve.getPoint((now / 1700 + l.phase) % 1));
+    for (const d of this.flowDots) d.mesh.position.lerpVectors(d.from, d.to, (now / 1900 + d.phase) % 1).setY(0.25);
     for (const w of this.wires) w.packet.position.copy(w.curve.getPoint((now / 1300 + w.phase) % 1));
     const rect = this.host.getBoundingClientRect();
     if (this.hovered) {

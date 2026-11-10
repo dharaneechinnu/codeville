@@ -3,7 +3,7 @@ import { crisp, type CvEvent } from '../shared/events.js';
 import { useCv } from './state.js';
 import { TestStage, type StageStep } from './teststage.js';
 import { Ico } from './icons.js';
-import type { Analysis, LinkKind } from '../shared/types.js';
+import type { Analysis, FlowStep, LinkKind } from '../shared/types.js';
 import { GestureLayer } from './gesturelayer.js';
 import { EditorDock } from './popups.js';
 import { LAYER_COLOR, LINK_COLOR, Town, type LinkMode, type Pick } from './town.js';
@@ -14,7 +14,7 @@ const OPEN_ICON = (
   </svg>
 );
 
-type Tab = 'build' | 'test';
+type Tab = 'build' | 'flow' | 'test';
 
 const LAYER_NAMES: [keyof typeof LAYER_COLOR, string][] = [
   ['frontend', 'Frontend'], ['backend', 'Backend'], ['database', 'Database'], ['tests', 'Tests'],
@@ -211,6 +211,9 @@ export function VizWidget(): JSX.Element {
         <button role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>
           Build
         </button>
+        <button role="tab" aria-selected={tab === 'flow'} onClick={() => setTab('flow')} title="How a user moves through this app, step by step, and the files behind each step">
+          Flow
+        </button>
         <button
           role="tab"
           aria-selected={tab === 'test'}
@@ -225,7 +228,95 @@ export function VizWidget(): JSX.Element {
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
       </div>
-      {tab === 'build' ? <BuildView /> : <TestView />}
+      {tab === 'build' ? <BuildView /> : tab === 'flow' ? <FlowView onShowInTown={() => setTab('build')} /> : <TestView />}
+    </div>
+  );
+}
+
+/** The user flow: the kind of app this is, the steps a user walks through, and the files of this project behind each step. */
+function FlowView({ onShowInTown }: { onShowInTown: () => void }): JSX.Element {
+  const { analysis, openEditor, select } = useCv();
+  const flow = analysis?.flow;
+  const [openId, setOpenId] = useState<string | null>(null);
+  if (!analysis || !flow) return <p className="mut pad">Open a project to see its flow.</p>;
+  const general = flow.template.id === 'general';
+  const current: FlowStep | undefined = flow.steps.find((s) => s.id === openId && s.found) ?? flow.steps.find((s) => s.found);
+  const missing = flow.steps.filter((s) => !s.found);
+  return (
+    <div className="flowview">
+      <header className="flhead">
+        <div>
+          <span className="mut small">{general ? 'No known kind of app matched' : 'This project looks like'}</span>
+          <b>{flow.template.name}</b>
+          {flow.template.examples.length > 0 && <span className="mut small">the same shape as {flow.template.examples.join(', ')}</span>}
+        </div>
+        <p>{flow.template.about}</p>
+        <span className={`chip ${flow.found === flow.total ? 'ok' : ''}`}>{flow.found} of {flow.total} steps found</span>
+      </header>
+
+      <ol className="flsteps" aria-label="User flow">
+        {flow.steps.map((s, i) => (
+          <li key={s.id}>
+            <button className={`flstep ${s.found ? '' : 'missing'} ${current?.id === s.id ? 'on' : ''}`} disabled={!s.found} aria-pressed={current?.id === s.id} onClick={() => setOpenId(s.id)}>
+              <i>{i + 1}</i>
+              <b>{s.name}</b>
+              <span>{s.about}</span>
+              {s.found ? (
+                <em>
+                  {LAYER_NAMES.filter(([k]) => s.layers[k] > 0).map(([k, name]) => (
+                    <u key={k} title={`${s.layers[k]} ${name.toLowerCase()} files`}><i style={{ background: LAYER_COLOR[k] }} />{s.layers[k]}</u>
+                  ))}
+                </em>
+              ) : (
+                <em className="none">Not in this project yet</em>
+              )}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {current && (
+        <section className="fldetail" aria-label={`Files for ${current.name}`}>
+          <div className="fldh">
+            <b>{current.name}</b>
+            <span className="mut small">{current.files.length} {current.files.length === 1 ? 'file' : 'files'} do this step. Click one to open it.</span>
+            <span className="sp" />
+            <button
+              className="btn sm"
+              onClick={() => {
+                select(current.files[0]?.path ?? null);
+                onShowInTown();
+              }}
+            >
+              Show in the town
+            </button>
+          </div>
+          <div className="flcols">
+            {LAYER_NAMES.filter(([k]) => current.layers[k] > 0).map(([k, name]) => (
+              <div key={k} className="flcol">
+                <h4><i style={{ background: LAYER_COLOR[k] }} />{name}</h4>
+                {current.files.filter((f) => f.layer === k).map((f) => (
+                  <button key={f.path} className="flfile" title={f.path} onClick={() => openEditor(f.path)}>
+                    <b>{f.path.split('/').pop()}</b>
+                    <span>{f.path.split('/').slice(0, -1).join('/')}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {missing.length > 0 && !general && (
+        <p className="flnote">
+          <b>Missing:</b> {missing.map((s) => s.name).join(', ')}. A typical {flow.template.name.toLowerCase()} has {missing.length === 1 ? 'this step' : 'these steps'}; no file in this project does {missing.length === 1 ? 'it' : 'them'} yet.
+        </p>
+      )}
+      {flow.others.length > 0 && (
+        <p className="flnote mut">
+          <b>Not part of the flow:</b> {flow.others.map((o) => `${o.name} (${o.files})`).join(', ')}. Shared code that the steps above use.
+        </p>
+      )}
     </div>
   );
 }

@@ -53,6 +53,29 @@ export interface FileLink {
   kind: LinkKind;
 }
 
+/** One step of the user flow, with the files of this project that do it. */
+export interface FlowStep {
+  id: string;
+  name: string;
+  /** One plain sentence: what a user does at this step. */
+  about: string;
+  found: boolean;
+  files: { path: string; layer: Layer }[];
+  layers: Record<Layer, number>;
+  /** The features these files belong to, the one with the most files first. */
+  features: string[];
+}
+
+/** The kind of app this is (its template) and that template's user flow, mapped onto the code. */
+export interface Flow {
+  template: { id: string; name: string; examples: string[]; about: string };
+  steps: FlowStep[];
+  found: number;
+  total: number;
+  /** Parts of the project that are not a step of the flow. */
+  others: { id: string; name: string; files: number }[];
+}
+
 /** A command the project itself uses to test, lint, type check or build, and the folder it runs in ('' for the project folder). */
 export interface RunCommand {
   id: string;
@@ -81,6 +104,8 @@ export interface Analysis {
   stack: Stack;
   layers: Record<Layer, number>;
   features: Feature[];
+  /** Missing when an older backend answers. */
+  flow?: Flow;
   connections: Connection[];
   /** Links between single files. Missing when an older backend answers. */
   fileLinks?: FileLink[];

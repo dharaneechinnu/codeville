@@ -179,3 +179,44 @@ def test_commands_and_tests_are_available_to_agents(auth, mixed):
     assert r.status_code == 200 and any(c["kind"] == "test" for c in r.json()["commands"])
     r = auth.post("/api/tools/find_tests", {"path": str(mixed)}, format="json")
     assert r.status_code == 200 and r.json()["total"] >= 4
+
+
+@pytest.fixture
+def grocery(tmp_path):
+    """A ten-minute grocery app: a different product from a book shop, but the same shape."""
+    for rel in [
+        "app/src/screens/HomeScreen.tsx", "app/src/screens/CategoryScreen.tsx", "app/src/screens/ProductCard.tsx",
+        "app/src/screens/CartScreen.tsx", "app/src/screens/CheckoutScreen.tsx", "app/src/screens/OrderTracking.tsx",
+        "server/routes/products.js", "server/routes/cart.js", "server/routes/payment.js", "server/routes/orders.js",
+        "server/routes/delivery_slots.js", "server/routes/login.js", "server/lib/logger.js",
+    ]:
+        write(tmp_path, rel)
+    return tmp_path
+
+
+def test_the_agent_matches_a_store_to_the_store_template(grocery):
+    flow = run_analysis(str(grocery))["flow"]
+    assert flow["template"]["id"] == "commerce" and "Blinkit" in flow["template"]["examples"]
+    steps = {s["id"]: s for s in flow["steps"]}
+    # the steps come in the order a shopper meets them
+    assert [s["id"] for s in flow["steps"]] == ["signin", "browse", "search", "cart", "pay", "orders", "notify"]
+    assert {f["path"] for f in steps["cart"]["files"]} == {"app/src/screens/CartScreen.tsx", "server/routes/cart.js"}
+    assert "server/routes/delivery_slots.js" in {f["path"] for f in steps["orders"]["files"]}
+    assert steps["cart"]["layers"]["frontend"] == 1 and steps["cart"]["layers"]["backend"] == 1
+    # a step the project does not have is reported as missing, not dropped
+    assert steps["search"]["found"] is False and steps["search"]["files"] == []
+    assert flow["found"] == 5 and flow["total"] == 7
+    # every file is in at most one step, and the rest is listed as other parts
+    placed = [f["path"] for s in flow["steps"] for f in s["files"]]
+    assert len(placed) == len(set(placed)) and any(o["files"] for o in flow["others"])
+
+
+def test_a_project_that_fits_no_template_follows_its_layers(portal, tmp_path_factory):
+    flow = run_analysis(str(portal))["flow"]
+    assert flow["template"]["id"] == "general"
+    assert [s["name"] for s in flow["steps"]] == ["Screens", "Logic", "Data", "Tests"] and flow["steps"][0]["found"]
+    # one stray file name is not enough to call something a dashboard app
+    lone = tmp_path_factory.mktemp("lone")
+    for rel in ["src/settings.py", "src/engine.py", "src/render.py", "src/parse.py", "src/export.py", "src/billing_notes.py", "src/a.py", "src/b.py", "src/c.py", "src/d.py", "src/e.py", "src/f.py", "src/g.py", "src/h.py"]:
+        write(lone, rel)
+    assert run_analysis(str(lone))["flow"]["template"]["id"] == "general"

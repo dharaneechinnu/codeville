@@ -14,7 +14,7 @@ block per file), a walking shopper that runs your tests, and short messages that
 | Widget | What it does |
 |---|---|
 | Chat | Type a prompt and send it to Claude Code. Shows what the agent did: edits, tools, sub-agents. |
-| Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
+| Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Flow**: the kind of app this is and its user flow, step by step, with the files behind each step. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
 | Files | The project by feature or by folder, with git badges. |
 | Source control | Stage, commit, commit and push, push. Failures say what broke and the next step. |
 
@@ -47,7 +47,7 @@ npm install
 npm start          # builds, then opens the window; the window starts the backend for you
 ```
 
-Tests: `npm test` (80 Python tests). Type check: `npm run typecheck`.
+Tests: `npm test` (the Python tests). Type check: `npm run typecheck`.
 
 For UI work: `npm run backend` in one terminal, `npm run dev:ui` in another, then open
 `http://localhost:5180/#base=http://127.0.0.1:<port>&token=<token>` (port and token are in `~/.code-visualizer/config.json`).
@@ -80,6 +80,21 @@ https://github.com/dharaneechinnu/codeville/releases/latest/download/Codeville-S
 
 To build the installer without releasing, run the Release workflow by hand from the Actions tab; the installer is kept
 with the run for 14 days.
+
+## Flow and templates
+
+Many projects are the same kind of app. Every online store has a catalog, a cart, a checkout and orders, whether it is
+Amazon or a ten-minute grocery app like Zepto or Blinkit. A **template** is that shared shape, written down once: the
+steps a user walks through, in order, and the words that name each step in code.
+
+The analysis (`match_template`, in `backend/visualizer/analysis/templates.py`) picks the template that fits the project
+and sorts the project's files into its steps. The **Flow** tab of the visualizer shows the result: the kind of app, the
+steps in order with how many frontend, backend and test files each has, the files behind the selected step (click to
+open), and the steps a typical app of this kind has that this project does not. In the town, the steps stand in order
+on one street, numbered, with a lit road between them.
+
+Templates today, written by hand: Online store, Social app, Blog or content site, Dashboard app. A project that fits
+none follows its layers (Screens, Logic, Data, Tests). To add a kind of app, add an entry to `TEMPLATES`.
 
 ## Hand control
 
