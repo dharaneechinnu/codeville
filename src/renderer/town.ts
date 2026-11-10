@@ -141,6 +141,9 @@ export class Town {
   private extent = 16;
   private wide = false;
   private style: BuildingStyle = 'workshop';
+  private notes: Record<string, string> = {};
+  /** Entry files the agent named: each is the door of its house. */
+  private entries = new Set<string>();
   private holo = false;
   private fog: THREE.Fog | null = null;
 
@@ -215,7 +218,9 @@ export class Town {
     this.tip.style.display = 'none';
     for (const child of [...this.scene.children]) if (child.userData.ground) this.scene.remove(child);
 
-    this.style = styleFor(a?.flow?.template.id);
+    this.style = styleFor(a?.flow);
+    this.notes = a?.notes ?? {};
+    this.entries = new Set((a?.flow?.steps ?? []).map((s) => s.entry ?? '').filter(Boolean));
     const all = a?.features ?? [];
     // When the project matches a known kind of app, the districts stand in the order of its user flow and carry the step number.
     const stepOf = new Map<string, number>();
@@ -515,7 +520,7 @@ export class Town {
     const front = of('frontend'), back = of('backend').slice(0, MAX_FLOORS), tests = of('tests').slice(0, 12);
     // The door is the file people come in through: a page or screen, or for a feature with no screens its routes.
     const name = (p: string): string => p.split('/').pop() ?? p;
-    const entry = front.find((x) => ENTRY_FRONT.test(name(x.path))) ?? front[0] ?? back.find((x) => ENTRY_BACK.test(name(x.path)));
+    const entry = f.files.find((x) => this.entries.has(x.path) && x.layer !== 'tests') ?? front.find((x) => ENTRY_FRONT.test(name(x.path))) ?? front[0] ?? back.find((x) => ENTRY_BACK.test(name(x.path)));
     const windows = front.filter((x) => x !== entry).slice(0, 2 + (MAX_FLOORS - 1) * 4);
     const floors = back.filter((x) => x !== entry);
     const storeys = Math.max(1, floors.length, windows.length <= 2 ? 1 : 1 + Math.ceil((windows.length - 2) / 4));
@@ -800,7 +805,8 @@ export class Town {
       if (floor) this.paint(floor);
       const b = mesh?.userData.building as Building | undefined;
       const name = floor?.path ? floor.path.split('/').pop()! : (b?.district.name ?? '');
-      this.tip.textContent = floor?.role ? `${ROLE_NAME[floor.role]} · ${name}` : name;
+      const note = floor?.path ? this.notes[floor.path] : undefined;
+      this.tip.textContent = (floor?.role ? `${ROLE_NAME[floor.role]} · ${name}` : name) + (note ? ` — ${note}` : '');
       this.tip.style.display = floor ? 'block' : 'none';
     }
     return mesh ? this.pickOf(mesh) : null;

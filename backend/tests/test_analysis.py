@@ -220,3 +220,62 @@ def test_a_project_that_fits_no_template_follows_its_layers(portal, tmp_path_fac
     for rel in ["src/settings.py", "src/engine.py", "src/render.py", "src/parse.py", "src/export.py", "src/billing_notes.py", "src/a.py", "src/b.py", "src/c.py", "src/d.py", "src/e.py", "src/f.py", "src/g.py", "src/h.py"]:
         write(lone, rel)
     assert run_analysis(str(lone))["flow"]["template"]["id"] == "general"
+
+
+def test_the_agents_map_decides_the_town_when_it_exists(grocery):
+    """A cart kept in a file with no telling name is found once an agent that read the code says so."""
+    write(grocery, "server/lib/helpers.js")
+    before = run_analysis(str(grocery))
+    assert before["flow"]["source"] == "names" and before["notes"] == {}
+    write(grocery, ".codeville/map.json", json.dumps({
+        "version": 1, "kind": "Grocery delivery", "summary": "People order groceries and get them in minutes.", "style": "shop",
+        "steps": [
+            {"name": "Pick items", "about": "Browse aisles.", "entry": "app/src/screens/HomeScreen.tsx", "files": ["app/src/screens/HomeScreen.tsx", "server/routes/products.js", "not/a/real/file.js"]},
+            {"name": "Basket", "about": "Keep the items.", "entry": "app/src/screens/CartScreen.tsx", "files": ["app/src/screens/CartScreen.tsx", "server/routes/cart.js", "server/lib/helpers.js", "app/src/screens/HomeScreen.tsx"]},
+            {"name": "Ghost", "about": "Nothing real.", "files": ["nope.js"]},
+        ],
+        "files": {"server/lib/helpers.js": "Works out the basket total.", "nope.js": "x"},
+    }))
+    a = run_analysis(str(grocery))
+    flow = a["flow"]
+    assert flow["source"] == "agent" and flow["template"]["name"] == "Grocery delivery" and flow["style"] == "shop" and a["kind"] == "Grocery delivery"
+    # steps keep the agent's order; paths that are not in the project and steps left empty are dropped
+    assert [s["name"] for s in flow["steps"]] == ["Pick items", "Basket"]
+    basket = flow["steps"][1]
+    assert "server/lib/helpers.js" in {f["path"] for f in basket["files"]} and basket["entry"] == "app/src/screens/CartScreen.tsx"
+    # a file belongs to one step only: the first that names it
+    assert "app/src/screens/HomeScreen.tsx" not in {f["path"] for f in basket["files"]}
+    # each step is a feature (a house), first and in order; the rest is still grouped; no file is lost or doubled
+    assert [f["id"] for f in a["features"][:2]] == ["pick-items", "basket"]
+    every = [f["path"] for feat in a["features"] for f in feat["files"]]
+    assert len(every) == len(set(every)) == a["totalFiles"]
+    assert a["notes"] == {"server/lib/helpers.js": "Works out the basket total."}
+
+
+def test_a_broken_map_is_ignored(grocery):
+    write(grocery, ".codeville/map.json", "{ not json")
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+    write(grocery, ".codeville/map.json", json.dumps({"steps": [{"name": "Only", "files": ["server/routes/cart.js"]}]}))
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+
+
+def test_agents_can_ask_for_the_map_shape_and_save_a_map(auth, grocery):
+    r = auth.post("/api/tools/project_map_request", {"path": str(grocery)}, format="json")
+    assert r.status_code == 200 and "server/routes/cart.js" in r.json()["instructions"] and r.json()["file"] == ".codeville/map.json"
+    bad = auth.post("/api/tools/save_project_map", {"path": str(grocery), "map": {"steps": []}}, format="json")
+    assert bad.status_code == 400 and "not saved" in bad.json()["error"]
+    good = {"kind": "Grocery delivery", "steps": [
+        {"name": "Pick", "files": ["server/routes/products.js"]}, {"name": "Basket", "files": ["server/routes/cart.js"]}]}
+    r = auth.post("/api/tools/save_project_map", {"path": str(grocery), "map": good}, format="json")
+    assert r.status_code == 200 and r.json()["steps"] == 2
+    assert run_analysis(str(grocery))["flow"]["source"] == "agent"
+    # the app can hand the same request to the connected agent, and can forget the map again
+    r = auth.post("/api/map/prompt", {"path": str(grocery)}, format="json")
+    assert r.status_code == 200 and ".codeville/map.json" in r.json()["prompt"]
+    assert auth.post("/api/map/clear", {"path": str(grocery)}, format="json").json() == {"cleared": True}
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+    # saving told the app the map changed; leave no event behind for other tests
+    from visualizer.hub import hub
+
+    assert any(e["type"] == "file.change" and e["path"] == ".codeville/map.json" for e in hub.recent(20))
+    hub._history.clear()

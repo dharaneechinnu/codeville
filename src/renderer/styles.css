@@ -456,3 +456,12 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .readkey b { font: 700 11px var(--mono); color: var(--text); min-width: 52px; }
 .readkey i { flex: none; width: 10px; height: 10px; align-self: center; }
 .k-door { background: #ffd23f; } .k-window { background: #19c6e6; } .k-floor { background: #ff9f43; } .k-roof { background: #5be37a; } .k-shell { background: #7f869e; }
+
+/* Flow: asking the connected agent to read the code */
+.flask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 9px 12px; border: 2px dashed var(--warn); background: rgba(255,176,46,.06); font-size: 13px; }
+.flask > span { flex: 1; min-width: 220px; }
+.flask.done { border: 2px solid #1f5a30; background: rgba(91,227,122,.06); }
+.flask b { font-weight: 700; }
+.flbusy { display: flex; align-items: center; gap: 8px; }
+.doorchip { font: normal 700 9px var(--mono); text-transform: uppercase; background: #ffd23f; color: #06101a; padding: 0 5px; margin-left: 6px; vertical-align: middle; }
+.flfile span { white-space: normal; }

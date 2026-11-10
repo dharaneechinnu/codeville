@@ -96,6 +96,21 @@ on one street, numbered, with a lit road between them.
 Templates today, written by hand: Online store, Social app, Blog or content site, Dashboard app. A project that fits
 none follows its layers (Screens, Logic, Data, Tests). To add a kind of app, add an entry to `TEMPLATES`.
 
+## Let Claude read the code
+
+File names only say so much: a cart kept in `utils.js` is invisible to a name-based guess. The Flow tab has a button,
+**Ask Claude to read the code**. It sends the connected Claude Code a request to read the project and write one small
+file, `.codeville/map.json`: the kind of app, the steps a user goes through in order, the files that do each step,
+each step's entry file, and one plain line per file. Claude changes nothing else.
+
+When the file is written the town rebuilds from it: each step becomes a house, the entry file its door, and pointing
+at any part shows Claude's line for that file. **Read again** refreshes the map after the code has changed; **Forget**
+goes back to the name-based guess. The app checks the map before using it: paths that are not in the project are
+dropped, and a map with fewer than two usable steps is ignored.
+
+Other agents can do the same over HTTP with the `project_map_request` and `save_project_map` tools. The map is a plain
+file in the project, so it can be committed and shared with the team.
+
 ## Reading a building
 
 Each feature is one house, and each part of the house is a file. The kind of part says what the file is for, so a
@@ -188,6 +203,8 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `recent_events` | The latest events, optionally filtered by type. |
 | `current_problems` | The newest failing test, lint, type or build run: what broke, where, what is next. |
 | `run_check` | Runs the project's own test, lint, type check or build and returns the same crisp result. |
+| `project_map_request` | The instructions, JSON shape and file list for describing the project. |
+| `save_project_map` | Saves the agent's description; the town is rebuilt from it. |
 | `git_status` | Branch, staged and changed files, ahead and behind. |
 
 `GET /api/tools` lists them with their JSON schemas. `POST /api/tools/<name>` calls one.
@@ -205,6 +222,7 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `POST /api/run`, `/api/stop` | Run or stop a command. |
 | `POST /api/git/changes`, `/stage`, `/commit`, `/push` | Source control. |
 | `POST /api/agent/send` | Send a prompt to Claude Code. |
+| `POST /api/map/prompt`, `/api/map/clear` | The request that asks the agent to map the project; forget the agent's map. |
 | `GET /api/project/templates`, `POST /api/project/new`, `/clone` | Start a project. |
 | `GET /api/doctor` | First-run checks for Git, Claude Code and Node.js. |
 

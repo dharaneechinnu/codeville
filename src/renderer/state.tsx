@@ -67,6 +67,12 @@ interface Ctx {
   sendPrompt: (prompt: string, model: string) => Promise<boolean>;
   agentLines: string[];
   agentRunning: boolean;
+  /** Asks the connected agent to read the code and write the project map; the town rebuilds when it has. */
+  askMap: () => Promise<void>;
+  /** Forgets the agent's map and goes back to what the file names say. */
+  clearMap: () => Promise<void>;
+  /** The agent is reading the code for the map right now. */
+  mapping: boolean;
   stopAgent: () => Promise<void>;
 }
 
@@ -233,6 +239,35 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
     [root],
   );
 
+  const [mapping, setMapping] = useState(false);
+  const askMap = useCallback(async () => {
+    if (!root) return;
+    try {
+      const { prompt } = await api<{ prompt: string }>('/api/map/prompt', { path: root });
+      if (await sendPrompt(prompt, '')) setMapping(true);
+    } catch (err) {
+      setNote({ kind: 'err', title: 'Could not ask Claude', broke: err instanceof Error ? err.message : '', next: 'Check that Claude Code is connected in Extensions.' });
+    }
+  }, [root, sendPrompt]);
+  const clearMap = useCallback(async () => {
+    if (!root) return;
+    await api('/api/map/clear', { path: root }).catch(() => undefined);
+    await openProject(root);
+  }, [root, openProject]);
+
+  // The town follows the map: rebuild when the agent finishes reading, or whenever the map file is written.
+  useEffect(() => {
+    if (!last || !root) return;
+    const wrote = last.type === 'file.change' && last.path.replace(/\\/g, '/').endsWith('.codeville/map.json');
+    const finished = mapping && last.type === 'turn.end';
+    if (!wrote && !finished) return;
+    if (finished) setMapping(false);
+    const t = window.setTimeout(() => void openProject(root), 400);
+    return () => window.clearTimeout(t);
+    // Runs once per new event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [last]);
+
   const stopAgent = useCallback(async () => {
     if (agentRun) await api('/api/stop', { runId: agentRun }).catch(() => undefined);
   }, [agentRun]);
@@ -262,7 +297,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const value: Ctx = {
     root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk, editorDocked, setEditorDocked,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
-    sendPrompt, agentLines, agentRunning, stopAgent,
+    sendPrompt, agentLines, agentRunning, stopAgent, askMap, clearMap, mapping,
   };
   return <CvContext.Provider value={value}>{children}</CvContext.Provider>;
 }

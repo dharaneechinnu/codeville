@@ -28,7 +28,7 @@ def call(client, name, body=None):
 def test_the_tool_list_describes_every_tool(auth):
     tools = auth.get("/api/tools").json()["tools"]
     names = {t["name"] for t in tools}
-    assert names == {"project_map", "analyze_project", "detect_stack", "find_features", "find_connections", "find_commands", "find_tests", "recent_events", "current_problems", "run_check", "git_status"}
+    assert names == {"project_map", "analyze_project", "detect_stack", "find_features", "find_connections", "find_commands", "find_tests", "project_map_request", "save_project_map", "recent_events", "current_problems", "run_check", "git_status"}
     for t in tools:
         assert t["description"] and t["inputSchema"]["type"] == "object"
 

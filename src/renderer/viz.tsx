@@ -143,7 +143,7 @@ function About(): JSX.Element | null {
           </dl>
           <div className="abrow">
             <dt>Buildings</dt>
-            <dd><span className="tag">{STYLE_NAME[styleFor(a.flow?.template.id)]}</span><span className="mut small"> because this is {a.flow && a.flow.template.id !== 'general' ? `an ${a.flow.template.name.toLowerCase()}`.replace(/^an (?![aeio])/, 'a ') : 'a general app'}</span></dd>
+            <dd><span className="tag">{STYLE_NAME[styleFor(a.flow)]}</span><span className="mut small"> because this is {a.flow && a.flow.template.id !== 'general' ? `an ${a.flow.template.name.toLowerCase()}`.replace(/^an (?![aeio])/, 'a ') : 'a general app'}</span></dd>
           </div>
           <ul className="readkey" aria-label="How to read a building">
             <li><i className="k-door" /><b>Door</b> the way in: the page or route people enter through</li>
@@ -247,24 +247,43 @@ export function VizWidget(): JSX.Element {
 
 /** The user flow: the kind of app this is, the steps a user walks through, and the files of this project behind each step. */
 function FlowView({ onShowInTown }: { onShowInTown: () => void }): JSX.Element {
-  const { analysis, openEditor, select } = useCv();
+  const { analysis, openEditor, select, askMap, clearMap, mapping } = useCv();
   const flow = analysis?.flow;
   const [openId, setOpenId] = useState<string | null>(null);
   if (!analysis || !flow) return <p className="mut pad">Open a project to see its flow.</p>;
   const general = flow.template.id === 'general';
+  const byAgent = flow.source === 'agent';
+  const notes = analysis.notes ?? {};
   const current: FlowStep | undefined = flow.steps.find((s) => s.id === openId && s.found) ?? flow.steps.find((s) => s.found);
   const missing = flow.steps.filter((s) => !s.found);
   return (
     <div className="flowview">
       <header className="flhead">
         <div>
-          <span className="mut small">{general ? 'No known kind of app matched' : 'This project looks like'}</span>
+          <span className="mut small">{byAgent ? 'Claude read the code. This is' : general ? 'No known kind of app matched' : 'From the file names, this looks like'}</span>
           <b>{flow.template.name}</b>
           {flow.template.examples.length > 0 && <span className="mut small">the same shape as {flow.template.examples.join(', ')}</span>}
         </div>
         <p>{flow.template.about}</p>
-        <span className={`chip ${flow.found === flow.total ? 'ok' : ''}`}>{flow.found} of {flow.total} steps found</span>
+        <span className={`chip ${flow.found === flow.total ? 'ok' : ''}`}>{byAgent ? `${flow.total} steps` : `${flow.found} of ${flow.total} steps found`}</span>
       </header>
+
+      <div className={`flask ${byAgent ? 'done' : ''}`}>
+        {mapping ? (
+          <span className="flbusy" role="status"><span className="aispin" aria-hidden="true" />Claude is reading the code. The town rebuilds when it is done.</span>
+        ) : byAgent ? (
+          <>
+            <span><b>Read by Claude.</b> Steps, doors and the line under each file come from the code itself, not from file names.</span>
+            <button className="btn sm" onClick={() => void askMap()}>Read again</button>
+            <button className="btn sm" onClick={() => void clearMap()} title="Go back to what the file names say">Forget</button>
+          </>
+        ) : (
+          <>
+            <span><b>This is a guess from file names.</b> Claude can read the code and map it properly: the real steps, each step's entry file, and what every file does.</span>
+            <button className="big" onClick={() => void askMap()}>Ask Claude to read the code</button>
+          </>
+        )}
+      </div>
 
       <ol className="flsteps" aria-label="User flow">
         {flow.steps.map((s, i) => (
@@ -309,8 +328,8 @@ function FlowView({ onShowInTown }: { onShowInTown: () => void }): JSX.Element {
                 <h4><i style={{ background: LAYER_COLOR[k] }} />{name}</h4>
                 {current.files.filter((f) => f.layer === k).map((f) => (
                   <button key={f.path} className="flfile" title={f.path} onClick={() => openEditor(f.path)}>
-                    <b>{f.path.split('/').pop()}</b>
-                    <span>{f.path.split('/').slice(0, -1).join('/')}</span>
+                    <b>{f.path.split('/').pop()}{current.entry === f.path && <em className="doorchip">door</em>}</b>
+                    <span>{notes[f.path] ?? f.path.split('/').slice(0, -1).join('/')}</span>
                   </button>
                 ))}
               </div>

@@ -28,6 +28,8 @@ urlpatterns = [
     path("api/agent/connect", views.AgentConnectView.as_view()),
     path("api/agent/disconnect", views.AgentDisconnectView.as_view()),
     path("api/stop", views.StopView.as_view()),
+    path("api/map/prompt", views.MapPromptView.as_view()),
+    path("api/map/clear", views.MapClearView.as_view()),
     path("api/tools", views.ToolsView.as_view()),
     path("api/tools/<str:name>", views.ToolCallView.as_view()),
 ]

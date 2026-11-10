@@ -14,8 +14,10 @@ export const STYLE_NAME: Record<BuildingStyle, string> = {
   shop: 'Market street', apartment: 'Apartment blocks', library: 'Library row', office: 'Glass offices', workshop: 'Workshops',
 };
 
-export function styleFor(templateId: string | undefined): BuildingStyle {
-  return STYLE_OF[templateId ?? 'general'] ?? 'workshop';
+/** The style of a town: the one the agent chose after reading the code, else the one that goes with the kind of app. */
+export function styleFor(flow: { template: { id: string }; style?: string | null } | undefined): BuildingStyle {
+  if (flow?.style && flow.style in STYLE_NAME) return flow.style as BuildingStyle;
+  return STYLE_OF[flow?.template.id ?? 'general'] ?? 'workshop';
 }
 
 const GLASS = '#16223f';

@@ -18,6 +18,7 @@ from .hub import hub
 from .models import Project
 from .runner import run_command, stop_run
 from . import agent, ai, connector, doctor, gitops, projects
+from .analysis import agentmap, steps as analysis_steps
 from .serializers import (
     AgentSerializer, AIEditSerializer, AISettingsSerializer, CloneSerializer, CommitSerializer, FileSerializer, FileWriteSerializer, NewProjectSerializer,
     FolderSerializer, PushSerializer, RunSerializer, StageSerializer,
@@ -331,6 +332,35 @@ class AgentSendView(APIView):
         except agent.AgentProblem as err:
             return _problem_response(err.problem)
         return Response({"runId": run_id}, status=status.HTTP_202_ACCEPTED)
+
+
+def _classified_files(root: Path) -> list:
+    files = analysis_steps.scan_files(root)["files"]
+    analysis_steps.classify_layers(files, analysis_steps.detect_stack(root, files))
+    return files
+
+
+class MapPromptView(APIView):
+    """The prompt that asks the connected agent to read the code and write the project map."""
+
+    def post(self, request):
+        s = FolderSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        root = Path(s.validated_data["path"]).resolve()
+        return Response({"prompt": agentmap.map_prompt(_classified_files(root)), "file": agentmap.MAP_FILE})
+
+
+class MapClearView(APIView):
+    """Forgets the agent's map, so the town goes back to what the file names say."""
+
+    def post(self, request):
+        s = FolderSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        target = Path(s.validated_data["path"]).resolve() / agentmap.MAP_FILE
+        existed = target.is_file()
+        if existed:
+            target.unlink()
+        return Response({"cleared": existed})
 
 
 class StopView(APIView):
