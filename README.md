@@ -96,6 +96,22 @@ on one street, numbered, with a lit road between them.
 Templates today, written by hand: Online store, Social app, Blog or content site, Dashboard app. A project that fits
 none follows its layers (Screens, Logic, Data, Tests). To add a kind of app, add an entry to `TEMPLATES`.
 
+## Building styles
+
+The town is drawn with real-looking buildings, not plain blocks. Each file is still one floor you can click or point
+at. The style is chosen from the kind of app the project is, so different projects look different at a glance:
+
+| Kind of app | Style | What you see |
+|---|---|---|
+| Online store | Market street | Shop windows, striped awnings, a sign board on the roof. |
+| Social app | Apartment blocks | Balconies, a water tank and a stair house on the roof. |
+| Blog or content site | Library row | Arched windows, columns and steps, a pitched roof. |
+| Dashboard app | Glass offices | Glass walls, a set-back crown, a mast or a helipad. |
+| General app | Workshops | Brick walls, a roller door, a saw-tooth roof and a chimney. |
+
+Wall colour still shows the layer. Within one feature the frontend, backend and test buildings differ in small parts
+(awning colour, roof equipment). The styles are designed by hand in `src/renderer/buildings.ts`.
+
 ## Hand control
 
 The hand button in the Build view turns the town into a full-window hologram and tracks your hand with the camera

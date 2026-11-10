@@ -2,6 +2,7 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Analysis, Connection, Feature, FileLink, Layer, LinkKind } from '../shared/types.js';
 import type { CvEvent } from '../shared/events.js';
+import { dress, floorMaterials, styleFor, type BuildingStyle } from './buildings.js';
 
 /** Every block is colored by the layer its file belongs to, so one building shows how a feature is built. */
 export const LAYER_COLOR: Record<Layer, string> = { frontend: '#19c6e6', backend: '#ff9f43', database: '#8a5cff', tests: '#5be37a' };
@@ -75,6 +76,8 @@ interface Building {
   /** Height of one block. Buildings with many files get thinner blocks so no tower hides the rest. */
   fh: number;
   service: boolean;
+  /** The parts on top of the last floor (roof, sign, chimney). Moves up when a floor is added. */
+  roof: THREE.Group | null;
   fire: THREE.Group;
   failed: boolean;
   activeUntil: number;
@@ -118,6 +121,7 @@ export class Town {
   private center = new THREE.Vector3();
   private extent = 16;
   private wide = false;
+  private style: BuildingStyle = 'workshop';
   private holo = false;
   private fog: THREE.Fog | null = null;
 
@@ -192,6 +196,7 @@ export class Town {
     this.tip.style.display = 'none';
     for (const child of [...this.scene.children]) if (child.userData.ground) this.scene.remove(child);
 
+    this.style = styleFor(a?.flow?.template.id);
     const all = a?.features ?? [];
     // When the project matches a known kind of app, the districts stand in the order of its user flow and carry the step number.
     const stepOf = new Map<string, number>();
@@ -247,10 +252,17 @@ export class Town {
         const b: Building = {
           feature: bf, layer, district: dist, group: bg, floors: [], color: new THREE.Color(service ? SERVICE_COLOR : LAYER_COLOR[layer]), width, service,
           fh: service ? 0.9 : Math.min(0.92, Math.max(0.3, 8 / Math.max(1, Math.min(files.length, MAX_FLOORS)))),
-          fire: this.makeFire(), failed: false, activeUntil: 0,
+          roof: null, fire: this.makeFire(), failed: false, activeUntil: 0,
         };
         b.fire.visible = false;
         bg.add(b.fire);
+        if (!service) {
+          // Street-level parts and the roof of this town's building style; the floors between them are the files.
+          const parts = dress(this.style, width, layer, b.color);
+          for (const part of [parts.base, parts.roof]) part.traverse((o) => (o.userData.trim = true));
+          b.roof = parts.roof;
+          bg.add(parts.base, parts.roof);
+        }
         if (service) for (let n = 0; n < 2; n++) this.addFloor(b, '', false, layer, SERVICE_COLOR);
         else files.slice(0, MAX_FLOORS).forEach((file) => this.addFloor(b, file.path, false, layer));
         group.add(bg);
@@ -308,11 +320,21 @@ export class Town {
     this.scene.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       if (o.userData.ground) o.visible = !on || !(o.geometry instanceof THREE.BoxGeometry);
+      if (o.userData.trim) {
+        // Doors, roofs and chimneys turn to faint glass too, so the floors (the files) stay the thing you aim at.
+        for (const m of this.mats(o)) {
+          m.transparent = on;
+          m.opacity = on ? 0.3 : 1;
+          m.depthWrite = !on;
+        }
+        return;
+      }
       if (!o.userData.floor) return;
-      const mat = o.material as THREE.MeshStandardMaterial;
-      mat.transparent = on;
-      mat.opacity = on ? 0.42 : 1;
-      mat.depthWrite = !on;
+      for (const mat of this.mats(o)) {
+        mat.transparent = on;
+        mat.opacity = on ? 0.42 : 1;
+        mat.depthWrite = !on;
+      }
       let edges = o.getObjectByName('holo-edges') as THREE.LineSegments | undefined;
       if (on && !edges) {
         edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry), new THREE.LineBasicMaterial({ color: '#5cf2ff', transparent: true, opacity: 0.95 }));
@@ -341,7 +363,7 @@ export class Town {
   }
 
   private anchor(b: Building): THREE.Vector3 {
-    return new THREE.Vector3(b.district.x + b.group.position.x, 0.18 + b.floors.length * b.fh + 0.25, b.district.z + b.group.position.z);
+    return new THREE.Vector3(b.district.x + b.group.position.x, 0.18 + b.floors.length * b.fh + (b.roof ? 1.1 : 0.25), b.district.z + b.group.position.z);
   }
 
   /** One curved pipe between two buildings, with a small packet that travels along it. */
@@ -376,6 +398,11 @@ export class Town {
       l.packet.visible = l.visible;
       (l.line.material as THREE.MeshBasicMaterial).opacity = focus ? 0.95 : 0.5;
     }
+  }
+
+  /** The building style this town is drawn in, chosen from the kind of app. */
+  getStyle(): BuildingStyle {
+    return this.style;
   }
 
   setLinkMode(mode: LinkMode): void {
@@ -413,7 +440,7 @@ export class Town {
     const base = new THREE.Color(color ?? LAYER_COLOR[layer]).offsetHSL(0, 0, i % 2 ? 0.04 : -0.04);
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(b.width, b.fh * 0.96, b.width),
-      new THREE.MeshStandardMaterial({ color: base, roughness: 0.85, emissive: '#000000' }),
+      b.service ? new THREE.MeshStandardMaterial({ color: base, roughness: 0.85, emissive: '#000000' }) : floorMaterials(this.style, base, b.width),
     );
     mesh.position.y = i * b.fh + b.fh / 2;
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35 }));
@@ -424,6 +451,7 @@ export class Town {
     b.group.add(mesh);
     b.floors.push(floor);
     this.meshes.push(mesh);
+    if (b.roof) b.roof.position.y = b.floors.length * b.fh;
     if (path) this.floorByPath.set(path, { b, floor });
     return floor;
   }
@@ -462,7 +490,7 @@ export class Town {
       f.bad = failed && (!floor || f === floor);
       this.paint(f);
     }
-    if (failed) b.fire.position.y = b.floors.length * b.fh + 0.6;
+    if (failed) b.fire.position.y = b.floors.length * b.fh + (b.roof ? 1.2 : 0.6);
   }
 
   private findFloor(path: string): { b: Building; floor: Floor } | undefined {
@@ -575,14 +603,22 @@ export class Town {
     }
   }
 
+  /** A floor has one material, or six when it carries a building style (four walls and two slabs). */
+  private mats(mesh: THREE.Mesh): THREE.MeshStandardMaterial[] {
+    return (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[];
+  }
+
+  private glow(f: Floor, color: THREE.ColorRepresentation, scale = 1): void {
+    for (const m of this.mats(f.mesh)) m.emissive.set(color).multiplyScalar(scale);
+  }
+
   /** One place decides a block's glow, so hover, selection, links and failures never fight over it. */
   private paint(f: Floor): void {
-    const mat = f.mesh.material as THREE.MeshStandardMaterial;
-    if (f === this.hovered) mat.emissive.set('#1f7f92');
-    else if (f.bad) mat.emissive.set('#7a0f1a');
-    else if (f === this.selected) mat.emissive.set('#3b4170');
-    else if (f.rel) mat.emissive.set(LINK_COLOR[f.rel]).multiplyScalar(0.4);
-    else mat.emissive.set('#000000');
+    if (f === this.hovered) this.glow(f, '#1f7f92');
+    else if (f.bad) this.glow(f, '#7a0f1a');
+    else if (f === this.selected) this.glow(f, '#3b4170');
+    else if (f.rel) this.glow(f, LINK_COLOR[f.rel], 0.4);
+    else this.glow(f, '#000000');
   }
 
   // ------------------------------------------------------------------------------------------ pointing
@@ -690,12 +726,11 @@ export class Town {
     const now = performance.now();
     this.pulses = this.pulses.filter((p) => {
       const t = (now - p.start) / 900;
-      const mat = p.floor.mesh.material as THREE.MeshStandardMaterial;
       if (t >= 1) {
         this.paint(p.floor);
         return false;
       }
-      mat.emissive.set('#ffffff').multiplyScalar(0.55 * (1 - t));
+      this.glow(p.floor, '#ffffff', 0.55 * (1 - t));
       return true;
     });
     for (const b of this.buildings.values()) {
@@ -715,7 +750,7 @@ export class Town {
     }
     for (const d of this.districts) {
       const top = Math.max(0.5, ...d.buildings.map((b) => b.floors.length * b.fh));
-      const v = new THREE.Vector3(d.x, top + 1.4, d.z).project(this.camera);
+      const v = new THREE.Vector3(d.x, top + 2.4, d.z).project(this.camera);
       d.label.style.display = v.z > 1 ? 'none' : 'block';
       d.label.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(-50%, -100%)`;
       d.label.classList.toggle('active', d.buildings.some((b) => now < b.activeUntil));

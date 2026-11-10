@@ -7,6 +7,7 @@ import type { Analysis, FlowStep, LinkKind } from '../shared/types.js';
 import { GestureLayer } from './gesturelayer.js';
 import { EditorDock } from './popups.js';
 import { LAYER_COLOR, LINK_COLOR, Town, type LinkMode, type Pick } from './town.js';
+import { STYLE_NAME, styleFor } from './buildings.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -140,6 +141,10 @@ function About(): JSX.Element | null {
               </div>
             ))}
           </dl>
+          <div className="abrow">
+            <dt>Buildings</dt>
+            <dd><span className="tag">{STYLE_NAME[styleFor(a.flow?.template.id)]}</span><span className="mut small"> because this is {a.flow && a.flow.template.id !== 'general' ? `an ${a.flow.template.name.toLowerCase()}`.replace(/^an (?![aeio])/, 'a ') : 'a general app'}</span></dd>
+          </div>
           <div className="legend" aria-label="Block colors">
             {LAYER_NAMES.map(([k, name]) => (
               <span key={k}><i style={{ background: LAYER_COLOR[k] }} />{name} {a.layers[k]}</span>
