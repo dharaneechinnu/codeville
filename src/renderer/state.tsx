@@ -64,7 +64,8 @@ interface Ctx {
   refreshGit: () => Promise<void>;
   gitAct: (path: string, body: Record<string, unknown>) => Promise<boolean>;
   run: (command: string, cwd?: string) => Promise<void>;
-  sendPrompt: (prompt: string, model: string) => Promise<boolean>;
+  /** Sends a prompt to Claude Code. It continues the project's conversation unless `fresh` starts a new one or `sessionId` names another. */
+  sendPrompt: (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string }) => Promise<boolean>;
   agentLines: string[];
   agentRunning: boolean;
   /** Asks the connected agent to read the code and write the project map; the town rebuilds when it has. */
@@ -118,6 +119,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [editorDocked, setEditorDocked] = useState(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [agentRun, setAgentRun] = useState<string | null>(null);
+  const [agentSince, setAgentSince] = useState(0);
 
   const { events, output, connected } = useEventStream(useCallback((e: CvEvent) => townRef.current?.handleEvent(e), []));
 
@@ -224,10 +226,12 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   );
 
   const sendPrompt = useCallback(
-    async (prompt: string, model: string): Promise<boolean> => {
+    async (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string }): Promise<boolean> => {
       if (!root) return false;
       try {
-        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model });
+        const sentAt = Date.now() - 500;
+        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, fresh: opts?.fresh ?? false, sessionId: opts?.sessionId ?? '' });
+        setAgentSince(sentAt);
         setAgentRun(r.runId);
         return true;
       } catch (err) {
@@ -275,12 +279,14 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const agentLines = useMemo(() => (agentRun ? output.filter((o) => o.runId === agentRun).map((o) => o.line) : []), [output, agentRun]);
   const agentRunning = useMemo(() => {
     if (!agentRun) return false;
+    // Only an ending that came after this prompt was sent counts; earlier turns ended too.
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
+      if (e && e.ts < agentSince) break;
       if (e?.type === 'turn.end' && e.source === 'app') return false;
     }
     return true;
-  }, [events, agentRun]);
+  }, [events, agentRun, agentSince]);
 
   const select = useCallback((path: string | null) => {
     setSelected(path);

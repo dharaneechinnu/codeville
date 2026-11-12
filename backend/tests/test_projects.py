@@ -101,7 +101,7 @@ def test_connect_adds_the_marketplace_then_installs_and_asks_for_a_restart(auth,
     monkeypatch.setattr(connector, "find_exe", lambda k: "C:/x/claude.exe")
     r = auth.post("/api/agent/connect", {}, format="json")
     assert r.status_code == 200
-    assert r.json() == {"claudeFound": True, "installed": True, "restartNeeded": True}
+    assert {k: r.json()[k] for k in ("claudeFound", "installed", "restartNeeded")} == {"claudeFound": True, "installed": True, "restartNeeded": True}
     assert calls[0][:3] == ("plugin", "marketplace", "add") and calls[1] == ("plugin", "install", "code-visualizer@code-visualizer")
 
 
@@ -112,7 +112,25 @@ def test_connect_without_claude_says_what_to_do(auth, monkeypatch):
     r = auth.post("/api/agent/connect", {}, format="json")
     assert r.status_code == 400
     assert r.json()["problem"]["what"] == "Claude Code was not found" and r.json()["problem"]["next"]
-    assert auth.get("/api/agent/status").json() == {"claudeFound": False, "installed": False}
+    assert auth.get("/api/agent/status").json() == {"claudeFound": False, "installed": False, "version": "", "signedIn": None}
+
+
+def test_status_says_which_claude_code_is_here_and_whether_it_is_signed_in(auth, monkeypatch):
+    from visualizer import connector
+
+    def fake(*a, timeout=120):
+        if a[0] == "--version":
+            return _Done(0, "2.1.322 (Claude Code)\n")
+        if a[:2] == ("auth", "status"):
+            return _Done(0, '{"loggedIn": false, "authMethod": "none"}')
+        return _Done(0, "code-visualizer@code-visualizer")
+
+    monkeypatch.setattr(connector, "find_exe", lambda k: "C:/x/claude.exe")
+    monkeypatch.setattr(connector, "_run", fake)
+    assert auth.get("/api/agent/status").json() == {"claudeFound": True, "installed": True, "version": "2.1.322", "signedIn": False}
+    # an older Claude Code that has no `auth status` simply cannot say
+    monkeypatch.setattr(connector, "_run", lambda *a, timeout=120: _Done(1, "", "unknown command") if a[0] == "auth" else _Done(0, "1.0.0 (Claude Code)"))
+    assert auth.get("/api/agent/status").json()["signedIn"] is None
 
 
 def test_connect_treats_already_added_as_fine_but_reports_real_failures(auth, monkeypatch):

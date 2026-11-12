@@ -178,6 +178,23 @@ A feature groups the files about the same thing across layers, for example `matt
 `test_matters.py`. The town gives each feature its own district with a separate building per layer, colors blocks by layer, shows the database as its own building and each outside service as a
 small block. The same tools are available to agents as `analyze_project`, `detect_stack`, `find_features`, `find_connections`, `find_commands` and `find_tests`.
 
+## Chat: your own Claude Code, as one conversation
+
+The Chat runs the Claude Code that is installed and signed in on this computer. Nothing is sent through Codeville's
+own servers and no key is stored: it is the same `claude` command you use in a terminal.
+
+- **It remembers.** A project keeps its Claude Code session, so each prompt continues the conversation
+  (`claude -p --resume <session>`). The new-session button starts a clean one; picking an older session continues that one.
+- **It streams.** The app reads Claude Code's native stream (`--output-format stream-json`): the words as they are
+  written, each tool as it is used, and how the turn ended.
+- **It can use Codeville.** Claude Code gets the Codeville tools (`plugin/code-visualizer/scripts/mcp.mjs`, an MCP
+  server with no dependencies): the project map, current problems, git state, running checks and saving a project map.
+- **It says what is wrong.** Extensions and the Chat show whether Claude Code is installed and signed in, and what to
+  do when it is not.
+
+This works without the plugin. The plugin (below) adds two things: Codeville also follows Claude Code when you run it
+yourself in a terminal, and that terminal session gets the same tools.
+
 ## Connect Claude Code
 
 The welcome screen and **Extensions** show the exact commands. In Claude Code:

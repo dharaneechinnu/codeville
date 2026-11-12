@@ -3,6 +3,7 @@ so people never type slash commands. A failure comes back as a Problem: what bro
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -42,15 +43,36 @@ def _run(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
 
 
 def status() -> dict:
-    """Is Claude Code here, and is the plugin installed."""
+    """Is Claude Code here, which version, is it signed in, and is the plugin installed."""
     if not find_exe("claude"):
-        return {"claudeFound": False, "installed": False}
+        return {"claudeFound": False, "installed": False, "version": "", "signedIn": None}
     try:
         r = _run("plugin", "list", timeout=30)
     except GitProblem:
-        return {"claudeFound": True, "installed": False}
+        return {"claudeFound": True, "installed": False, "version": "", "signedIn": None}
     installed = f"{PLUGIN}@{MARKETPLACE}" in r.stdout
-    return {"claudeFound": True, "installed": installed}
+    return {"claudeFound": True, "installed": installed, **cli_info()}
+
+
+def cli_info() -> dict:
+    """The Claude Code version and whether it is signed in. `signedIn` is None when this version cannot say."""
+    version, signed = "", None
+    try:
+        v = _run("--version", timeout=20)
+        version = (v.stdout or "").strip().split(" ")[0] if v.returncode == 0 else ""
+        a = _run("auth", "status", timeout=20)
+        data = json.loads(a.stdout) if a.stdout.strip().startswith("{") else None
+        if isinstance(data, dict) and isinstance(data.get("loggedIn"), bool):
+            signed = data["loggedIn"]
+    except Exception:  # noqa: BLE001 - this is extra information; never let it break connecting
+        pass
+    return {"version": version, "signedIn": signed}
+
+
+def _changed() -> None:
+    from . import agent
+
+    agent.forget_plugin_state()
 
 
 def _said(r: subprocess.CompletedProcess, *words: str) -> bool:
@@ -65,6 +87,7 @@ def disconnect() -> dict:
         last = (gone.stderr or gone.stdout).strip().splitlines()[-1:] or ["claude plugin uninstall failed"]
         raise GitProblem(problem("Could not remove the Codeville plugin from Claude Code", last, "Close other Claude Code windows and try again, or run `/plugin uninstall code-visualizer@code-visualizer` inside Claude Code."))
     _run("plugin", "marketplace", "remove", MARKETPLACE)  # it may already be gone; the plugin is what matters
+    _changed()
     return {**status(), "restartNeeded": True}
 
 
@@ -81,4 +104,5 @@ def connect() -> dict:
     if inst.returncode != 0 and not _said(inst, "already"):
         last = (inst.stderr or inst.stdout).strip().splitlines()[-1:] or ["claude plugin install failed"]
         raise GitProblem(problem("Could not install the Codeville plugin", last, "Try again, or use the manual commands."))
+    _changed()
     return {**status(), "restartNeeded": True}

@@ -471,7 +471,11 @@ export function ExtensionsPopup({ onClose }: { onClose: () => void }): JSX.Eleme
             <b>Claude Code</b>
             <span className={`chip ${link.state === 'active' ? 'ok' : ''}`}>{link.state === 'active' ? 'Connected' : link.state === 'installed' ? 'Installed' : 'Not connected'}</span>
           </div>
-          <p className="mut small">Shows what the agent edits and runs, and lets you send prompts from the Chat.</p>
+          <p className="mut small">
+            The Chat runs your own Claude Code on this computer as one continuing conversation, and gives it the Codeville tools (project map, problems, git).
+            {link.claudeFound && <> {link.version ? `Version ${link.version}` : 'Installed'}, {link.signedIn ? 'signed in' : <b className="badmsg">not signed in: run `claude` in a terminal and sign in</b>}.</>}
+          </p>
+          <p className="mut small">Connecting the plugin is optional: it also shows what Claude Code does when you run it yourself in a terminal, and gives it the same tools there.</p>
           <ConnectAgent />
         </section>
 

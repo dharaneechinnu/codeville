@@ -81,6 +81,10 @@ class AgentSerializer(FolderSerializer):
     prompt = serializers.CharField(error_messages={"required": "Write what you want done", "blank": "Write what you want done"})
     model = serializers.CharField(required=False, allow_blank=True, default="")
     acceptEdits = serializers.BooleanField(default=True)
+    # Continue this Claude Code session; empty continues the project's latest one.
+    sessionId = serializers.CharField(required=False, allow_blank=True, default="")
+    # Start a new conversation instead of continuing.
+    fresh = serializers.BooleanField(default=False)
 
 
 class NewProjectSerializer(serializers.Serializer):

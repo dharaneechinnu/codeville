@@ -465,3 +465,7 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .flbusy { display: flex; align-items: center; gap: 8px; }
 .doorchip { font: normal 700 9px var(--mono); text-transform: uppercase; background: #ffd23f; color: #06101a; padding: 0 5px; margin-left: 6px; vertical-align: middle; }
 .flfile span { white-space: normal; }
+
+/* Chat: the live transcript of the turn in progress */
+.m.live { border-style: dashed; color: var(--muted); }
+.tool.dim .aispin { margin-right: 6px; }

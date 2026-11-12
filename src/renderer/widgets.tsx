@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CvEvent } from '../shared/events.js';
 import { useCv, type Note } from './state.js';
 import { Ico } from './icons.js';
+import { useAgentLink } from './agentlink.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -100,6 +101,7 @@ export function ChatWidget(): JSX.Element {
   const [picked, setPicked] = useState<string | null>(null);
   const [newSince, setNewSince] = useState(0);
   const [sesMenu, setSesMenu] = useState(false);
+  const link = useAgentLink();
   const sessions = useMemo(() => sessionsOf(events, root), [events, root]);
   // After "New session", follow the first session that starts afterwards.
   useEffect(() => {
@@ -111,6 +113,16 @@ export function ChatWidget(): JSX.Element {
   // Events with no session (git commits, pushes) belong to the project, so they show in every view.
   const mine = useMemo(() => events.filter((e) => !e.sessionId || e.sessionId === shownId), [events, shownId]);
   const lines = useMemo(() => (picked === 'new' ? [] : toLines(mine)), [mine, picked]);
+
+  // Once a turn has ended with Claude's answer in the conversation, the live transcript above it has done its job.
+  const answered = useMemo(() => {
+    for (let i = mine.length - 1; i >= 0; i--) {
+      const e = mine[i]!;
+      if (e.type === 'turn.end') return !!e.message;
+      if (e.type === 'prompt') return false;
+    }
+    return false;
+  }, [mine]);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -130,7 +142,8 @@ export function ChatWidget(): JSX.Element {
       setConfirm(true);
       return;
     }
-    if (await sendPrompt(prompt, model)) {
+    // A new session starts a fresh conversation; a picked older one is continued; otherwise the current one goes on.
+    if (await sendPrompt(prompt, model, { fresh: picked === 'new', sessionId: picked && picked !== 'new' ? picked : undefined })) {
       setText('');
       requestAnimationFrame(grow);
     }
@@ -180,7 +193,13 @@ export function ChatWidget(): JSX.Element {
       <div className="msgs" ref={scroller}>
         {!root && <p className="mut">Open a project to start.</p>}
         {root && lines.length === 0 && agentLines.length === 0 && (
-          <p className="mut">Tell your agent what to build. Everything it does shows up here and in the town.</p>
+          <p className="mut">Tell Claude Code what to build. It runs on this computer with your own sign-in, remembers this conversation, and everything it does shows up here and in the town.</p>
+        )}
+        {root && !link.claudeFound && (
+          <div className="cc err"><b>Claude Code is not installed</b><div><i>Next</i>Install Claude Code, check that `claude` runs in a terminal, then restart Codeville.</div></div>
+        )}
+        {root && link.claudeFound && !link.signedIn && (
+          <div className="cc err"><b>Claude Code is not signed in</b><div><i>Next</i>Open a terminal, run `claude` and sign in. This message goes away by itself.</div></div>
         )}
         {lines.map((l) =>
           l.kind === 'user' ? (
@@ -208,12 +227,13 @@ export function ChatWidget(): JSX.Element {
             </div>
           ),
         )}
-        {agentLines.length > 0 && (
-          <div className="m">
+        {agentLines.length > 0 && (agentRunning || !answered) && (
+          <div className="m live">
             <span className="who">Claude Code{agentRunning ? ' · working' : ''}</span>
             {agentLines.slice(-40).join('\n')}
           </div>
         )}
+        {agentRunning && agentLines.length === 0 && <div className="tool dim"><span className="aispin" aria-hidden="true" /> Claude Code is starting…</div>}
       </div>
 
       <div className="composer">
