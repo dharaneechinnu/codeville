@@ -106,7 +106,7 @@ def public_settings() -> dict:
         out.append({
             "id": pid, "label": p["label"], "tier": p["tier"], "keyUrl": p["keyUrl"], "models": p["models"],
             "needsKey": not p.get("noKey") and not p.get("optionalKey"),
-            "model": mine.get("model") or (p["models"][0] if p["models"] else ""),
+            "model": mine.get("model") or (p["models"][0] if p["models"] else "default" if p["api"] == "cli" else ""),
             "baseUrl": mine.get("baseUrl") or p["base"], "editableUrl": pid in ("ollama", "custom"),
             "hasKey": bool(key), "keyHint": _hint(key) if key else "", "ready": bool(ready), "cli": cli,
         })
@@ -142,7 +142,7 @@ def _resolve(provider: Optional[str]) -> tuple:
     pid = provider or s.get("active")
     if not pid:
         raise AIProblem(problem("No AI model is set up yet", ["Codeville needs a model to edit files"],
-                                "Open Extensions, then use a signed-in AI engine, or pick a provider under AI models and paste its key."))
+                                "Open the AI engines page and use a signed-in engine, or pick a provider under Extensions, AI models and paste its key."))
     if pid not in PROVIDERS:
         raise AIProblem(problem("That provider is not supported", [f"Got {pid!r}"], "Pick one from the list in Extensions."))
     p, mine = PROVIDERS[pid], s["providers"].get(pid, {})
@@ -150,7 +150,7 @@ def _resolve(provider: Optional[str]) -> tuple:
     if not key and not p.get("noKey") and not p.get("optionalKey"):
         raise AIProblem(problem(f"{p['label']} has no API key", ["The key has not been added yet"],
                                 f"Get a key at {p['keyUrl']}, then paste it in Extensions, AI models."))
-    model = mine.get("model") or (p["models"][0] if p["models"] else "")
+    model = mine.get("model") or (p["models"][0] if p["models"] else "default" if p["api"] == "cli" else "")
     base = mine.get("baseUrl") or p["base"]
     if not model:
         raise AIProblem(problem("No model is chosen", [f"{p['label']} needs a model name"], "Type the model name in Extensions, AI models."))

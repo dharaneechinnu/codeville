@@ -61,7 +61,10 @@ def tools(tmp_path, monkeypatch):
 def test_status_says_what_is_installed_and_who_is_signed_in(auth, tools):
     r = auth.get("/api/engines")
     assert r.status_code == 200
-    claude, copilot = r.json()["engines"]
+    listed = r.json()["engines"]
+    assert [e["id"] for e in listed] == ["claude", "copilot", "codex", "gemini", "opencode", "qwen", "amp"]
+    claude, copilot, codex = listed[:3]
+    assert not codex["found"] and codex["install"] == "npm install -g @openai/codex" and codex["loginCommand"] == "codex login"
     assert claude["found"] and claude["version"] == "9.9.9 (stand-in)"
     assert claude["account"] == {"state": "signedIn", "name": "dev@example.com"}
     assert claude["loginCommand"] == "claude auth login" and claude["provider"] == "claude-cli"
@@ -115,6 +118,70 @@ def test_a_signed_out_engine_says_how_to_sign_in(auth, tools):
     assert r.status_code == 502 and r.json()["error"] == "GitHub Copilot CLI is not signed in"
     assert "copilot login" in r.json()["problem"]["next"]
     assert r.json()["problem"]["why"] == ["Error: No authentication information found."]
+
+
+def test_every_engine_has_a_safe_command_line():
+    for eid, e in engines.ENGINES.items():
+        ask = engines.ask_command(eid, "m1", exe="x")
+        chat = engines.agent_command(eid, "m1", True, exe="x")
+        locked = engines.agent_command(eid, None, False, exe="x")
+        for args in (ask, chat, locked):
+            assert not any(w in a.lower() for a in args for w in ("yolo", "allow-all", "dangerously", "bypass", "danger-full")), (eid, args)
+        assert ("m1" in ask) == bool(e["model"]) and "m1" not in locked
+    assert engines.ask_command("codex", None, exe="x") == ["x", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--color", "never"]
+    assert engines.agent_command("codex", "gpt-5", True, exe="x")[-4:] == ["--model", "gpt-5", "--sandbox", "workspace-write"]
+    assert engines.agent_command("gemini", None, True, exe="x") == ["x", "--skip-trust", "-o", "text", "--approval-mode", "auto_edit"]
+    assert engines.agent_command("gemini", None, False, exe="x")[-2:] == ["--approval-mode", "plan"]
+    assert engines.agent_command("opencode", None, False, exe="x") == ["x", "run", "--agent", "plan"]
+    assert engines.agent_command("qwen", None, True, exe="x") == ["x", "--approval-mode", "auto-edit"]
+    assert engines.agent_command("amp", "ignored", True, exe="x") == ["x", "-x", "--no-color"]
+
+
+def test_sign_in_is_read_from_the_tool_a_key_or_a_saved_file(tools, tmp_path, monkeypatch):
+    monkeypatch.setattr(engines, "_home", lambda: tmp_path)
+    for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "AMP_API_KEY", "DASHSCOPE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    assert engines._account("gemini", "x") == {"state": "unknown", "name": ""}
+    (tmp_path / ".gemini").mkdir()
+    (tmp_path / ".gemini" / "oauth_creds.json").write_text('{"refresh_token": "r"}')
+    assert engines._account("gemini", "x") == {"state": "signedIn", "name": ""}
+    monkeypatch.setenv("AMP_API_KEY", "k")
+    assert engines._account("amp", "x") == {"state": "signedIn", "name": "token in AMP_API_KEY"}
+
+    class Said:
+        stdout, stderr = "", ""
+
+    monkeypatch.setattr(engines, "_run", lambda args, timeout=15: Said)
+    Said.stdout = "Not logged in\n"
+    assert engines._account("codex", "x") == {"state": "signedOut", "name": ""}
+    Said.stdout, Said.stderr = "", "Logged in using ChatGPT\n"
+    assert engines._account("codex", "x") == {"state": "signedIn", "name": "ChatGPT"}
+
+
+def test_what_each_tool_prints_when_signed_out_is_understood():
+    for eid, text in (
+        ("codex", "Not logged in"),
+        ("gemini", "Please set an Auth method in your settings.json or specify one of the following environment variables"),
+        ("qwen", "No auth type is selected. Please configure an auth type before running in non-interactive mode."),
+        ("amp", "Login failed: That code looks incomplete."),
+        ("copilot", "Error: No authentication information found."),
+    ):
+        assert engines.explain(eid, None, 1, text)["what"].endswith("is not signed in"), eid
+    assert engines.login_command("gemini") == "gemini" and engines.login_command("opencode") == "opencode auth login"
+
+
+def test_one_off_questions_run_in_an_empty_folder_away_from_saved_keys(tools):
+    said = engines.ask("claude", "where")
+    assert engines.ask_dir().is_dir() and not any(engines.ask_dir().iterdir()) and said.startswith("OK")
+
+
+def test_a_tool_known_to_be_signed_out_is_not_started(tools, monkeypatch):
+    monkeypatch.setattr(engines, "_account", lambda engine, exe: {"state": "signedOut", "name": ""})
+    engines.status(refresh=True)
+    monkeypatch.setattr(engines.subprocess, "run", lambda *a, **k: pytest.fail("the tool was started"))
+    with pytest.raises(engines.EngineProblem) as err:
+        engines.ask("claude", "hi")
+    assert err.value.problem["what"] == "Claude Code is not signed in"
 
 
 def test_failures_are_explained():
@@ -174,7 +241,7 @@ def test_a_failed_chat_run_says_what_to_do(auth, tools, tmp_path, monkeypatch):
     global start
     start = int(time.time() * 1000)
     out = _send(auth, tmp_path, monkeypatch, {"prompt": "Add coupon", "engine": "copilot"})
-    assert "GitHub Copilot CLI is not signed in. Press Sign in" in out
+    assert "GitHub Copilot CLI is not signed in. Press Sign in on the AI engines page" in out
 
 
 def test_an_unknown_or_missing_engine_is_refused(auth, tools, tmp_path):

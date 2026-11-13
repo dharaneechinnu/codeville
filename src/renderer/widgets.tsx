@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CvEvent } from '../shared/events.js';
 import { useCv, type Note } from './state.js';
 import { Ico } from './icons.js';
-import { useEngines } from './engines.js';
+import { openEngines, useEngines } from './engines.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -283,6 +283,9 @@ export function ChatWidget(): JSX.Element {
                       {e.id === engine && <i>on</i>}
                     </button>
                   ))}
+                  <button role="menuitem" onClick={() => { setEngMenu(false); openEngines(); }}>
+                    <span>Set up engines…</span>
+                  </button>
                 </div>
               )}
             </div>

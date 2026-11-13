@@ -5,7 +5,7 @@ import { useAgentLink } from './agentlink.js';
 import { Ico } from './icons.js';
 import { useCv } from './state.js';
 import { AIBar, AIModels, AIReview } from './aiedit.js';
-import { AIEngines } from './engines.js';
+import { EnginesSummary } from './engines.js';
 import type { AIEdit } from './ai.js';
 
 interface PopupProps {
@@ -460,7 +460,7 @@ export function ExtensionsPopup({ onClose }: { onClose: () => void }): JSX.Eleme
             <b>AI engines</b>
             <span className="chip">Your own account</span>
           </div>
-          <AIEngines />
+          <EnginesSummary />
         </section>
 
         <section className="extcard" id="ext-ai">

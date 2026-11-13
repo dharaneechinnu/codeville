@@ -149,28 +149,37 @@ line if any, and what to do next.
 
 ## AI engines (your own account)
 
-An AI engine is a command-line tool that is already signed in on this computer. Codeville starts it the way you would
-in a terminal, and it answers with your account. No key or token is typed into Codeville or stored by it.
+An AI engine is a coding agent you already have as a command-line tool, signed in on this computer. Codeville starts it
+the way you would in a terminal, and it answers with your account. No key or token is typed into Codeville or stored
+by it.
 
-| Engine | Install | Sign in | Account |
-|---|---|---|---|
-| Claude Code | `npm install -g @anthropic-ai/claude-code` | `claude auth login` | Anthropic (Claude plan or API key) |
-| GitHub Copilot CLI | `npm install -g @github/copilot` | `copilot login` | GitHub (a Copilot plan) |
+| Engine | Install | Sign in |
+|---|---|---|
+| Claude Code (Anthropic) | `npm install -g @anthropic-ai/claude-code` | `claude auth login` |
+| GitHub Copilot CLI | `npm install -g @github/copilot` | `copilot login` |
+| Codex CLI (OpenAI) | `npm install -g @openai/codex` | `codex login` |
+| Gemini CLI (Google) | `npm install -g @google/gemini-cli` | run `gemini`, it asks on first run |
+| OpenCode | `npm install -g opencode-ai` | `opencode auth login` |
+| Qwen Code (Alibaba) | `npm install -g @qwen-code/qwen-code` | run `qwen`, it asks on first run |
+| Amp (Sourcegraph) | `npm install -g @sourcegraph/amp` | `amp login` |
 
-Open **Extensions, AI engines**. Each engine shows whether it is installed and which account it uses. **Sign in** opens
-the tool's own sign-in in a terminal, **Test** sends one real question, and **Use for the editor** makes it the model
-behind **Edit with AI**. In the **Chat**, pick the engine next to the model.
+Open the **AI engines** page (the chip icon in the top bar, or the link on the welcome screen). Each engine shows
+whether it is installed and which account it uses. **Sign in** opens the tool's own sign-in in a terminal, **Test**
+sends one real question, and **Use for the editor** makes it the model behind **Edit with AI**. In the **Chat**, pick
+the engine next to the model.
 
-How it runs them (in `backend/visualizer/engines.py`):
+How it runs them (one table in `backend/visualizer/engines.py`; adding an engine is one more row):
 
 - The prompt goes in on standard input, never as a command-line argument, so a whole file fits and nothing you type is
   read by `cmd.exe` on the way to an npm launcher.
-- A one-off question (an AI edit, a test) runs with tools off: `claude -p --tools ""`, and `copilot -s` with no allow
-  rule, which Copilot treats as deny in non-interactive mode.
-- In the Chat, Claude Code runs with `--permission-mode acceptEdits` and Copilot with `--allow-tool=write`: file edits
-  only. Neither is given an allow-everything flag.
-- The town lights up live for Claude Code (through the plugin's hooks). Copilot's output shows in the Chat; the town
-  catches up from the changed files.
+- A one-off question (an AI edit, a test) runs in an empty folder in the engine's read-only mode: Claude Code with
+  tools off, Copilot with no allow rule, Codex in its read-only sandbox, Gemini, Qwen and OpenCode in plan mode. Amp
+  has no read-only mode.
+- In the Chat an engine may edit files in the open project: `acceptEdits` for Claude Code, `--allow-tool=write` for
+  Copilot, the `workspace-write` sandbox for Codex, auto-edit for Gemini and Qwen. No engine is ever given an
+  allow-everything flag; a test checks every command line for one.
+- The town lights up live for Claude Code (through the plugin's hooks). For the other engines the Chat shows their
+  output and the town catches up from the changed files.
 
 ## AI edits (your own key)
 
