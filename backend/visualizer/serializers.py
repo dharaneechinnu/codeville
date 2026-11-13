@@ -102,3 +102,15 @@ class NewProjectSerializer(serializers.Serializer):
 class CloneSerializer(serializers.Serializer):
     parent = serializers.CharField(error_messages={"required": "Choose where to put the project", "blank": "Choose where to put the project"})
     url = serializers.CharField(error_messages={"required": "Paste a repository link", "blank": "Paste a repository link"})
+
+
+class TeamStartSerializer(FolderSerializer):
+    request = serializers.CharField(max_length=8000, error_messages={"required": "Tell the team what to do", "blank": "Tell the team what to do"})
+
+
+class TeamAnswerSerializer(serializers.Serializer):
+    runId = serializers.CharField(max_length=80)
+    gate = serializers.ChoiceField(choices=["pick", "design", "security"])
+    roles = serializers.ListField(child=serializers.CharField(max_length=40), required=False, max_length=10)
+    approve = serializers.BooleanField(required=False, default=False)
+    proceed = serializers.BooleanField(required=False, default=False)

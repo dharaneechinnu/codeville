@@ -17,11 +17,11 @@ from .git import NotARepo, git_status
 from .hub import hub
 from .models import Project
 from .runner import run_command, stop_run
-from . import agent, ai, connector, doctor, engines, gitops, projects
+from . import agent, ai, connector, doctor, engines, gitops, projects, team
 from .analysis import agentmap, steps as analysis_steps
 from .serializers import (
     AgentSerializer, AIEditSerializer, AISettingsSerializer, CloneSerializer, CommitSerializer, EngineSerializer, FileSerializer, FileWriteSerializer, NewProjectSerializer,
-    FolderSerializer, PushSerializer, RunSerializer, StageSerializer,
+    FolderSerializer, PushSerializer, RunSerializer, StageSerializer, TeamAnswerSerializer, TeamStartSerializer,
 )
 from .analyzer import analyze_project
 from .tools import ToolError, call_tool, list_tools
@@ -450,3 +450,59 @@ class AgentConnectView(APIView):
             return Response(connector.connect())
         except gitops.GitProblem as err:
             return _problem_response(err.problem)
+
+
+def _team_error(err: "team.TeamProblem") -> Response:
+    return Response({"error": err.problem["what"], "problem": err.problem}, status=err.status)
+
+
+class TeamView(APIView):
+    """The development team: its roles, this computer's settings for them, and the current run."""
+
+    def get(self, request):
+        run = team.current()
+        return Response({**team.describe(), "run": run.public() if run else None})
+
+
+class TeamSettingsView(APIView):
+    def post(self, request):
+        data = request.data if isinstance(request.data, dict) else {}
+        team.save_settings(data)
+        return Response(team.describe())
+
+
+class TeamStartView(APIView):
+    """Gives a request to the Lead. The Lead picks the team, and the run waits for the person to agree."""
+
+    def post(self, request):
+        s = TeamStartSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        state.set_root(s.validated_data["path"])
+        try:
+            run = team.Team(hub).start(s.validated_data["path"], s.validated_data["request"])
+        except team.TeamProblem as err:
+            return _team_error(err)
+        return Response(run.public(), status=status.HTTP_202_ACCEPTED)
+
+
+class TeamAnswerView(APIView):
+    """The person's answer at a gate: the team pick, the design, or a high security finding."""
+
+    def post(self, request):
+        s = TeamAnswerSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        d = s.validated_data
+        try:
+            run = team.Team(hub).answer(d["runId"], d["gate"], roles=d.get("roles"), approve=d["approve"], proceed=d["proceed"])
+        except team.TeamProblem as err:
+            return _team_error(err)
+        return Response(run.public())
+
+
+class TeamStopView(APIView):
+    def post(self, request):
+        try:
+            run = team.Team(hub).stop(str((request.data or {}).get("runId", "")))
+        except team.TeamProblem as err:
+            return _team_error(err)
+        return Response(run.public())

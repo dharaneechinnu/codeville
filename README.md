@@ -240,12 +240,46 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `POST /api/git/changes`, `/stage`, `/commit`, `/push` | Source control. |
 | `POST /api/agent/send` | Send a prompt to an AI engine (`engine`: `claude`, `copilot`, `codex`, ...). Claude Code continues the project's conversation. |
 | `GET /api/engines`, `POST /api/engines/login` | The AI engines on this computer, and their sign-in. |
+| `GET /api/team`, `POST /api/team/settings` | The team's roles and this computer's settings for them. |
+| `POST /api/team/start`, `/answer`, `/stop` | Give a request to the team, answer it at a gate (the pick, the design, a serious security finding), stop it. |
 | `POST /api/map/prompt`, `/api/map/clear` | The request that asks the agent to map the project; forget the agent's map. |
 | `GET /api/project/templates`, `POST /api/project/new`, `/clone` | Start a project. |
 | `GET /api/doctor` | First-run checks for Git, Claude Code and Node.js. |
 
 Errors come back as `{"error": "..."}`, and for git and project actions also as a `problem`: what broke, why, the file and
 line if any, and what to do next.
+
+## The team
+
+Turn on **Team** in the Chat and describe a feature or a fix. A **Lead** that is always on reads the request and the
+project, then picks the smallest team that can do it from six specialists: Architect, UI and UX designer, Developer,
+Tester, Security reviewer and Deployment. A typo fix uses the Developer alone; a new sign-in feature may use five.
+
+1. The Lead shows its pick, with one line of reason per agent. Add or remove one, then press Start.
+2. When the Architect is called, its design waits for your approval before anyone changes a file (a setting on the
+   Team page turns this off).
+3. The picked agents work one after another. Each one's last reply is a handoff note for the next, saved in
+   `.codeville/team/<run>/` inside the project (kept out of git).
+4. If the Tester's tests fail, the Developer is sent back, at most twice. A high security finding waits for you.
+5. When Deployment was called, Codeville commits the files the team changed. You push.
+
+What Codeville enforces, whatever the agents are told (`backend/visualizer/team.py`):
+
+- Each agent is its own Claude Code run with its own tool list. The Lead, Architect, designer and Security reviewer
+  can only read. Nobody gets a shell.
+- Before each agent works, Codeville takes a picture of the project, and afterwards puts back any file that agent may
+  not change: the Tester only test files, Deployment only build and CI files and their docs, nobody `.env` files.
+- The Tester and Deployment can run only the project's own test and build commands, through the Codeville
+  `run_check` tool, which no longer accepts a command line of its own.
+- Security always reviews a change that touches sign-in, payments, user input, uploaded files, secrets or packages:
+  from the words of the request, and again from the files the Developer actually changed. It cannot be removed for
+  such a change, even when it is switched off on the Team page.
+- An agent may ask the Lead for help only with a decision it cannot make (the Architect, or the designer for the
+  Developer). It cannot pull in testing or a release.
+
+With Team on, the Architect also reads the project once to write the project map, so every agent starts from the same
+picture. It changes no code. The **Team** page (people icon in the top bar) lists the agents, what each may do, and
+lets you switch one off, give it a model, or add instructions of your own. The team runs on Claude Code for now.
 
 ## AI engines (your own account)
 
