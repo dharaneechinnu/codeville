@@ -221,9 +221,9 @@ def test_the_chat_sends_the_prompt_to_claude_code_on_stdin(auth, tools, tmp_path
     global start
     start = int(time.time() * 1000)
     out = _send(auth, tmp_path, monkeypatch, {"prompt": 'Add a "coupon" field', "model": "sonnet"})
-    assert json.loads(out.split("args=")[1].split(" stdin=")[0]) == ["-p", "--model", "sonnet", "--permission-mode", "acceptEdits"]
-    assert json.loads(out.split(" stdin=")[1]) == 'Add a "coupon" field'
-    assert hub.recent(1)[0]["message"] == "Claude Code finished (exit 0)"
+    args = json.loads(out.split("args=")[1].split(" stdin=")[0])
+    assert args[:3] == ["-p", "--output-format", "stream-json"] and "sonnet" in args and "acceptEdits" in args
+    assert 'Add a "coupon" field' not in args and json.loads(out.split(" stdin=")[1]) == 'Add a "coupon" field'
 
 
 def test_the_chat_can_send_to_copilot_which_may_write_files_but_not_run_commands(auth, tools, tmp_path, monkeypatch):
@@ -234,7 +234,9 @@ def test_the_chat_can_send_to_copilot_which_may_write_files_but_not_run_commands
     args = json.loads(out.split("args=")[1].split(" stdin=")[0])
     assert args == ["-s", "--no-color", "--no-ask-user", "--allow-tool=write"]
     assert not any("allow-all" in a for a in args)
-    assert hub.recent(1)[0]["message"] == "GitHub Copilot CLI finished (exit 0)"
+    # Its reply becomes a message in the conversation, after the prompt that asked for it.
+    asked, ended = hub.recent(2)
+    assert asked["type"] == "prompt" and asked["text"] == "Add coupon" and ended["message"].startswith("OK args=")
 
 
 def test_a_failed_chat_run_says_what_to_do(auth, tools, tmp_path, monkeypatch):
@@ -242,6 +244,7 @@ def test_a_failed_chat_run_says_what_to_do(auth, tools, tmp_path, monkeypatch):
     start = int(time.time() * 1000)
     out = _send(auth, tmp_path, monkeypatch, {"prompt": "Add coupon", "engine": "copilot"})
     assert "GitHub Copilot CLI is not signed in. Press Sign in on the AI engines page" in out
+    assert "GitHub Copilot CLI is not signed in" in hub.recent(1)[0]["message"]
 
 
 def test_an_unknown_or_missing_engine_is_refused(auth, tools, tmp_path):

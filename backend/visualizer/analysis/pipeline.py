@@ -9,7 +9,9 @@ from typing import Callable, Optional
 
 from . import steps
 from .commands import find_commands, find_tests
-from .connections import find_connections
+from .connections import trace
+from .templates import match_template
+from .agentmap import features_from_map, flow_from_map, load_map
 
 Emit = Optional[Callable[[dict], None]]
 
@@ -19,6 +21,7 @@ STEP_LABELS = [
     ("detect_stack", "Detecting frameworks, database and services"),
     ("classify_layers", "Sorting files into frontend, backend, database and tests"),
     ("find_features", "Finding features"),
+    ("match_template", "Matching a known kind of app and its user flow"),
     ("find_connections", "Tracing how the pieces connect"),
     ("find_commands", "Finding how to run tests, lint and build"),
     ("find_tests", "Listing the test cases"),
@@ -48,8 +51,11 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
     ident = step("read_identity", lambda: steps.read_identity(root), lambda r: r["title"])
     stack = step("detect_stack", lambda: steps.detect_stack(root, files), lambda r: ", ".join([*r["frontend"], *r["backend"], *r["database"]][:6]) or "nothing recognised")
     layers = step("classify_layers", lambda: steps.classify_layers(files, stack), lambda r: f"{r['frontend']} frontend, {r['backend']} backend, {r['database']} database, {r['tests']} tests")
-    features = step("find_features", lambda: steps.find_features(files), lambda r: f"{sum(1 for f in r if f['kind'] == 'feature')} features")
-    connections = step("find_connections", lambda: find_connections(root, features), lambda r: f"{len(r)} links")
+    # When the connected agent has read the code and written its map, the town follows that; otherwise the names decide.
+    amap = load_map(root, files)
+    features = step("find_features", lambda: features_from_map(files, amap) if amap else steps.find_features(files), lambda r: f"{sum(1 for f in r if f['kind'] == 'feature')} features" + (", from the agent's map" if amap else ""))
+    flow = step("match_template", lambda: flow_from_map(amap, files) if amap else {**match_template(features), "source": "names", "style": None}, lambda r: f"{r['template']['name']}: {r['found']} of {r['total']} steps found")
+    connections, file_links = step("find_connections", lambda: trace(root, features), lambda r: f"{len(r[0])} links between buildings, {len(r[1])} between files")
     commands = step("find_commands", lambda: find_commands(root), lambda r: f"{sum(1 for c in r if c['kind'] == 'test')} test commands, {len(r)} in all")
     tests = step("find_tests", lambda: find_tests(root, files, commands), lambda r: f"{len(r)} test cases in {len({t['file'] for t in r})} files")
     summary = step("summarize", lambda: steps.summarize(stack, layers, features), lambda r: r["kind"])
@@ -59,12 +65,15 @@ def run_analysis(root_input: str, emit: Emit = None) -> dict:
         "title": ident["title"],
         "summary": ident["summary"],
         "root": str(root),
-        "kind": summary["kind"],
+        "kind": (amap or {}).get("kind") or summary["kind"],
         "stackLine": summary["stackLine"],
         "stack": stack,
         "layers": layers,
         "features": features,
+        "flow": flow,
+        "notes": amap["notes"] if amap else {},
         "connections": connections,
+        "fileLinks": file_links,
         "commands": commands,
         "tests": tests,
         "totalFiles": len(files),

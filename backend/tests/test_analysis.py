@@ -111,6 +111,22 @@ def test_the_agent_traces_how_buildings_connect(wired):
     assert not any(f.startswith("database:") or f == t for f, t, _ in links)
 
 
+def test_the_agent_traces_how_single_files_connect(wired):
+    a = run_analysis(str(wired))
+    links = {(e["from"], e["to"], e["kind"]) for e in a["fileLinks"]}
+    api, service, model = "backend/app/api/matters.py", "backend/app/services/matters.py", "backend/app/models/matter.py"
+    page = "frontend/src/features/matters/MatterList.tsx"
+    # a file imports another file, and a file that uses a model stores data through it
+    assert (api, service, "imports") in links and (service, model, "stores") in links
+    # the page that fetches /api/matters calls the file that defines that route
+    assert (page, api, "calls") in links
+    # a test file covers the file it imports
+    assert ("backend/tests/test_matters.py", service, "tests") in links
+    # both ends are always files of the project, and no file links to itself
+    known = {f["path"] for feat in a["features"] for f in feat["files"]}
+    assert all(f in known and t in known and f != t for f, t, _ in links)
+
+
 def test_the_connections_tool_is_available_to_agents(auth, wired):
     r = auth.post("/api/tools/find_connections", {"path": str(wired)}, format="json")
     assert r.status_code == 200 and r.json()["total"] > 0 and r.json()["links"][0].keys() >= {"from", "to", "kind", "weight"}
@@ -163,3 +179,103 @@ def test_commands_and_tests_are_available_to_agents(auth, mixed):
     assert r.status_code == 200 and any(c["kind"] == "test" for c in r.json()["commands"])
     r = auth.post("/api/tools/find_tests", {"path": str(mixed)}, format="json")
     assert r.status_code == 200 and r.json()["total"] >= 4
+
+
+@pytest.fixture
+def grocery(tmp_path):
+    """A ten-minute grocery app: a different product from a book shop, but the same shape."""
+    for rel in [
+        "app/src/screens/HomeScreen.tsx", "app/src/screens/CategoryScreen.tsx", "app/src/screens/ProductCard.tsx",
+        "app/src/screens/CartScreen.tsx", "app/src/screens/CheckoutScreen.tsx", "app/src/screens/OrderTracking.tsx",
+        "server/routes/products.js", "server/routes/cart.js", "server/routes/payment.js", "server/routes/orders.js",
+        "server/routes/delivery_slots.js", "server/routes/login.js", "server/lib/logger.js",
+    ]:
+        write(tmp_path, rel)
+    return tmp_path
+
+
+def test_the_agent_matches_a_store_to_the_store_template(grocery):
+    flow = run_analysis(str(grocery))["flow"]
+    assert flow["template"]["id"] == "commerce" and "Blinkit" in flow["template"]["examples"]
+    steps = {s["id"]: s for s in flow["steps"]}
+    # the steps come in the order a shopper meets them
+    assert [s["id"] for s in flow["steps"]] == ["signin", "browse", "search", "cart", "pay", "orders", "notify"]
+    assert {f["path"] for f in steps["cart"]["files"]} == {"app/src/screens/CartScreen.tsx", "server/routes/cart.js"}
+    assert "server/routes/delivery_slots.js" in {f["path"] for f in steps["orders"]["files"]}
+    assert steps["cart"]["layers"]["frontend"] == 1 and steps["cart"]["layers"]["backend"] == 1
+    # a step the project does not have is reported as missing, not dropped
+    assert steps["search"]["found"] is False and steps["search"]["files"] == []
+    assert flow["found"] == 5 and flow["total"] == 7
+    # every file is in at most one step, and the rest is listed as other parts
+    placed = [f["path"] for s in flow["steps"] for f in s["files"]]
+    assert len(placed) == len(set(placed)) and any(o["files"] for o in flow["others"])
+
+
+def test_a_project_that_fits_no_template_follows_its_layers(portal, tmp_path_factory):
+    flow = run_analysis(str(portal))["flow"]
+    assert flow["template"]["id"] == "general"
+    assert [s["name"] for s in flow["steps"]] == ["Screens", "Logic", "Data", "Tests"] and flow["steps"][0]["found"]
+    # one stray file name is not enough to call something a dashboard app
+    lone = tmp_path_factory.mktemp("lone")
+    for rel in ["src/settings.py", "src/engine.py", "src/render.py", "src/parse.py", "src/export.py", "src/billing_notes.py", "src/a.py", "src/b.py", "src/c.py", "src/d.py", "src/e.py", "src/f.py", "src/g.py", "src/h.py"]:
+        write(lone, rel)
+    assert run_analysis(str(lone))["flow"]["template"]["id"] == "general"
+
+
+def test_the_agents_map_decides_the_town_when_it_exists(grocery):
+    """A cart kept in a file with no telling name is found once an agent that read the code says so."""
+    write(grocery, "server/lib/helpers.js")
+    before = run_analysis(str(grocery))
+    assert before["flow"]["source"] == "names" and before["notes"] == {}
+    write(grocery, ".codeville/map.json", json.dumps({
+        "version": 1, "kind": "Grocery delivery", "summary": "People order groceries and get them in minutes.", "style": "shop",
+        "steps": [
+            {"name": "Pick items", "about": "Browse aisles.", "entry": "app/src/screens/HomeScreen.tsx", "files": ["app/src/screens/HomeScreen.tsx", "server/routes/products.js", "not/a/real/file.js"]},
+            {"name": "Basket", "about": "Keep the items.", "entry": "app/src/screens/CartScreen.tsx", "files": ["app/src/screens/CartScreen.tsx", "server/routes/cart.js", "server/lib/helpers.js", "app/src/screens/HomeScreen.tsx"]},
+            {"name": "Ghost", "about": "Nothing real.", "files": ["nope.js"]},
+        ],
+        "files": {"server/lib/helpers.js": "Works out the basket total.", "nope.js": "x"},
+    }))
+    a = run_analysis(str(grocery))
+    flow = a["flow"]
+    assert flow["source"] == "agent" and flow["template"]["name"] == "Grocery delivery" and flow["style"] == "shop" and a["kind"] == "Grocery delivery"
+    # steps keep the agent's order; paths that are not in the project and steps left empty are dropped
+    assert [s["name"] for s in flow["steps"]] == ["Pick items", "Basket"]
+    basket = flow["steps"][1]
+    assert "server/lib/helpers.js" in {f["path"] for f in basket["files"]} and basket["entry"] == "app/src/screens/CartScreen.tsx"
+    # a file belongs to one step only: the first that names it
+    assert "app/src/screens/HomeScreen.tsx" not in {f["path"] for f in basket["files"]}
+    # each step is a feature (a house), first and in order; the rest is still grouped; no file is lost or doubled
+    assert [f["id"] for f in a["features"][:2]] == ["pick-items", "basket"]
+    every = [f["path"] for feat in a["features"] for f in feat["files"]]
+    assert len(every) == len(set(every)) == a["totalFiles"]
+    assert a["notes"] == {"server/lib/helpers.js": "Works out the basket total."}
+
+
+def test_a_broken_map_is_ignored(grocery):
+    write(grocery, ".codeville/map.json", "{ not json")
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+    write(grocery, ".codeville/map.json", json.dumps({"steps": [{"name": "Only", "files": ["server/routes/cart.js"]}]}))
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+
+
+def test_agents_can_ask_for_the_map_shape_and_save_a_map(auth, grocery):
+    r = auth.post("/api/tools/project_map_request", {"path": str(grocery)}, format="json")
+    assert r.status_code == 200 and "server/routes/cart.js" in r.json()["instructions"] and r.json()["file"] == ".codeville/map.json"
+    bad = auth.post("/api/tools/save_project_map", {"path": str(grocery), "map": {"steps": []}}, format="json")
+    assert bad.status_code == 400 and "not saved" in bad.json()["error"]
+    good = {"kind": "Grocery delivery", "steps": [
+        {"name": "Pick", "files": ["server/routes/products.js"]}, {"name": "Basket", "files": ["server/routes/cart.js"]}]}
+    r = auth.post("/api/tools/save_project_map", {"path": str(grocery), "map": good}, format="json")
+    assert r.status_code == 200 and r.json()["steps"] == 2
+    assert run_analysis(str(grocery))["flow"]["source"] == "agent"
+    # the app can hand the same request to the connected agent, and can forget the map again
+    r = auth.post("/api/map/prompt", {"path": str(grocery)}, format="json")
+    assert r.status_code == 200 and ".codeville/map.json" in r.json()["prompt"]
+    assert auth.post("/api/map/clear", {"path": str(grocery)}, format="json").json() == {"cleared": True}
+    assert run_analysis(str(grocery))["flow"]["source"] == "names"
+    # saving told the app the map changed; leave no event behind for other tests
+    from visualizer.hub import hub
+
+    assert any(e["type"] == "file.change" and e["path"] == ".codeville/map.json" for e in hub.recent(20))
+    hub._history.clear()
