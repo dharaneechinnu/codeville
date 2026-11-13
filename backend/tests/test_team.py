@@ -268,15 +268,29 @@ def test_deployment_commits_only_the_teams_files_and_never_pushes(auth, project,
     git("add", "-A")
     git("commit", "-qm", "start")
     (project / "notes.txt").write_text("mine, not the team's\n")
-    play(monkeypatch, Script(lead=lead("developer", "deployment"), developer=lambda r, p: (write("src/cart.py", "v2\n")(r), done())[1],
+    (project / "staged.txt").write_text("staged by me\n")
+    git("add", "staged.txt")
+
+    def developer(r, p):
+        write("src/cart.py", "v2\n")(r)
+        write("src/scratch.py")(r)
+        return done()
+
+    def tidy(r, p):
+        os.remove(os.path.join(r, "src", "scratch.py"))  # made by the team, then removed again
+        return done()
+
+    tester = lambda r, p: (write("tests/test_more.py", "def test_more():\n    pass\n")(r), done())[1]  # noqa: E731
+    play(monkeypatch, Script(lead=lead("developer", "developer", "tester", "deployment"), developer=[developer, tidy], tester=tester,
                              deployment=lambda r, p: (write(".github/workflows/ci.yml", "on: push\n")(r), done("Release notes."))[1]))
     start(auth, project, "Release the new cart")
     agree(auth, wait("pick"))
     run = wait("done")
-    assert run.commit and run.commit["files"] == 2
+    assert run.commit and run.commit["files"] == 3, run.commit
     shown = git("show", "--name-only", "--format=%s", "HEAD").stdout.split()
-    assert "src/cart.py" in shown and ".github/workflows/ci.yml" in shown and "notes.txt" not in shown
-    assert git("status", "--porcelain").stdout.strip() == "?? notes.txt"
+    assert {"src/cart.py", "tests/test_more.py", ".github/workflows/ci.yml"} <= set(shown)
+    assert not {"notes.txt", "staged.txt", "src/scratch.py"} & set(shown)
+    assert git("status", "--porcelain").stdout.splitlines() == ["A  staged.txt", "?? notes.txt"]
     assert "Push it from Source control" in run.summary
 
 

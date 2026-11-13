@@ -737,16 +737,26 @@ class Team:
         run.state = "done"
 
     def _commit(self, run: Run) -> Optional[dict]:
-        """Deployment prepares and commits; the person pushes. Only the files the team changed are committed."""
-        files = list(run.changed)
-        if not files:
-            return None
+        """Deployment prepares and commits; the person pushes. Only the files the team changed go in the commit, even
+        when the person has other files staged, and a file the team made and then removed is left out."""
+        root = run.root
         try:
-            gitops.stage(run.root, files, True)
-            first = run.request.strip().splitlines()[0][:68]
-            return gitops.commit(run.root, f"{first}\n\n{run.plan or 'Made by the Codeville team.'}\n\nMade by the Codeville team, run {run.id}.")
+            gitops._repo_or_raise(root)
         except gitops.GitProblem as err:
             return {"error": err.problem["what"], "next": err.problem["next"]}
+        tracked = set(gitops._git(root, "ls-files", "--", *run.changed).stdout.split()) if run.changed else set()
+        files = [p for p in run.changed if (Path(root) / p).exists() or p in tracked]
+        if not files:
+            return None
+        first = run.request.strip().splitlines()[0][:68]
+        message = f"{first}\n\n{run.plan or 'Made by the Codeville team.'}\n\nMade by the Codeville team, run {run.id}."
+        add = gitops._git(root, "add", "--", *files)
+        done = add if add.returncode != 0 else gitops._git(root, "commit", "-m", message, "--", *files)
+        if done.returncode != 0:
+            why = (done.stderr or done.stdout).strip().splitlines()
+            return {"error": "The team's commit failed", "next": (why[-1] if why else "git refused") + ". Commit from Source control instead."}
+        return {"hash": gitops._git(root, "rev-parse", "--short", "HEAD").stdout.strip(), "branch": gitops.branch_name(root),
+                "files": len(files), "message": message}
 
     def _summary(self, run: Run) -> str:
         lines = [f"# Team run {run.id}", "", f"**Request:** {run.request}", "", f"**Result:** {run.state}"]
