@@ -70,11 +70,11 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
     with _lock:
         _runs[run_id] = AgentRun(run_id, proc)
 
-    said: list = []  # the last lines it printed, to explain a failure
+    said: dict = {"out": [], "err": []}  # the last lines it printed, to explain a failure
 
     def tell(line: str, name: str) -> None:
-        said.append(line)
-        del said[:-20]
+        said[name].append(line)
+        del said[name][:-20]
         if on_output:
             on_output(line, name, run_id)
 
@@ -96,7 +96,8 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
             _runs.pop(run_id, None)
         if (proc.returncode or 0) > 0:  # a negative code means the user pressed Stop
             # A failed run usually means the account: say what to do, not only what the tool printed.
-            p = engines.explain(engine, model, proc.returncode, "\n".join(said))
+            # Its error stream, when it has one: the other stream is the agent talking about the user's code.
+            p = engines.explain(engine, model, proc.returncode, "\n".join(said["err"] or said["out"]))
             tell(f"{p['what']}. {p['next']}", "err")
         hub.push({"type": "turn.end", "source": "app", "message": f"{label} finished (exit {proc.returncode})"})
 

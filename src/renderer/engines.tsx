@@ -40,7 +40,8 @@ export function useEngines(): { engines: Engine[] | null; reload: (refresh?: boo
   }, []);
   useEffect(() => {
     void reload().catch(() => undefined);
-    const on = (): void => void reload(true).catch(() => undefined);
+    // Not forced: the backend remembers the answer for a short while and forgets it after a sign-in or a test.
+    const on = (): void => void reload().catch(() => undefined);
     window.addEventListener('focus', on);
     window.addEventListener('cv:engines', on);
     return () => {
