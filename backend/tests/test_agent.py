@@ -99,3 +99,15 @@ def test_the_command_continues_the_session_and_brings_the_codeville_tools(monkey
     # with the plugin installed, the plugin brings the tools itself; a new conversation has nothing to resume
     args = agent.build_args("claude", None, False, None, hooked=True)
     assert "--mcp-config" not in args and "--resume" not in args and "--model" not in args and "--permission-mode" not in args
+
+
+def test_claude_code_may_not_run_commands_through_codeville_without_asking():
+    """Every tool is either pre-approved because it only reads (or saves the map), or it is run_check, which is not."""
+    from visualizer.tools import list_tools
+
+    names = {t["name"] for t in list_tools()}
+    assert set(agent.SAFE_TOOLS) == names - {"run_check"}
+    allowed = agent.build_args("claude", None, True, None, True)
+    listed = allowed[allowed.index("--allowedTools") + 1].split(",")
+    assert "mcp__codeville__git_status" in listed and "mcp__plugin_code-visualizer_codeville__save_project_map" in listed
+    assert not any(t.endswith("run_check") or t in ("mcp__codeville", "mcp__plugin_code-visualizer_codeville") for t in listed)

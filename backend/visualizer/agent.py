@@ -31,8 +31,13 @@ from .hub import EventHub
 from .parsers import normalize_path
 
 MCP_NAME = "codeville"
-# Claude Code may call the Codeville tools without asking: they only read the project and save the project map.
-ALLOWED_TOOLS = [f"mcp__{MCP_NAME}", f"mcp__plugin_code-visualizer_{MCP_NAME}"]
+# The Codeville tools Claude Code may call without asking: the ones that only read the project, and saving the project
+# map. `run_check` is left out on purpose: it runs a shell command, so it goes through Claude Code's own permissions.
+SAFE_TOOLS = (
+    "project_map", "analyze_project", "detect_stack", "find_connections", "project_map_request", "save_project_map",
+    "find_commands", "find_tests", "find_features", "recent_events", "current_problems", "git_status",
+)
+ALLOWED_TOOLS = [f"mcp__{server}__{tool}" for server in (MCP_NAME, f"plugin_code-visualizer_{MCP_NAME}") for tool in SAFE_TOOLS]
 NOT_SIGNED_IN = re.compile(r"(invalid api key|please run /login|not logged in|authentication_error|oauth token has expired)", re.I)
 NO_SESSION = re.compile(r"no conversation found", re.I)
 SIGN_IN_HELP = "Claude Code is not signed in. Open a terminal, run `claude`, sign in, then send your message again."
