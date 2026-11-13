@@ -19,6 +19,7 @@ from .knowledge import DEP_PREFIXES, DEPS
 
 MAX_READ = 60_000
 MAX_EDGES = 300
+MAX_FILE_LINKS = 800
 
 DB_PACKAGES = {
     "sqlalchemy", "psycopg", "psycopg2", "psycopg2-binary", "asyncpg", "pymongo", "redis", "sqlmodel", "peewee", "databases",
@@ -114,6 +115,12 @@ def _resolve_js(importer: str, spec: str, paths: set) -> Optional[str]:
 
 def find_connections(root: Path, features: list) -> list:
     """Returns the links between buildings as [{from, to, kind, weight}], strongest first."""
+    return trace(root, features)[0]
+
+
+def trace(root: Path, features: list) -> tuple:
+    """Traces the project once and returns two lists: the links between buildings, and the links between single files
+    (blocks) as [{from, to, kind}] where both ends are file paths."""
     owner: dict = {}
     layer_of: dict = {}
     for f in features:
@@ -124,44 +131,63 @@ def find_connections(root: Path, features: list) -> list:
     pyidx = _py_index(list(paths))
     edges: Counter = Counter()
     routes: dict = {}
+    route_file: dict = {}
     texts: dict = {}
+    file_links: dict = {}
 
     def link(a: str, b: str, kind: str, n: int = 1) -> None:
         if a != b:
             edges[(a, b, kind)] += n
+
+    def flink(a: str, b: str, kind: str) -> None:
+        if a != b:
+            file_links.setdefault((a, b), kind)
+
+    def inside(path: str, t: str, a: str) -> None:
+        """One file of the project uses another."""
+        if layer_of.get(t) == "tests":
+            return
+        kind = "stores" if layer_of.get(t) == "database" else "imports"
+        link(a, owner[t], kind)
+        flink(path, t, kind)
 
     for path in sorted(paths):
         text = _read(root / path)
         texts[path] = text
         a = owner[path]
         ext = path.rsplit(".", 1)[-1]
-        if layer_of[path] in ("tests", "database"):
+        if layer_of[path] == "tests":
+            # A test file covers the files it imports. This only links blocks; the building links stay per feature.
+            for t in _imports_of(path, text, ext, pyidx, paths):
+                if layer_of.get(t) != "tests":
+                    flink(path, t, "tests")
+            continue
+        if layer_of[path] == "database":
             continue
         if ext == "py":
             for dots, module, names in PY_FROM.findall(text):
                 targets = _resolve_py(path, dots, module, [n.strip().split(" as ")[0].strip("() ") for n in names.split(",")], pyidx)
                 for t in targets:
-                    if layer_of.get(t) != "tests":
-                        link(a, owner[t], "stores" if layer_of.get(t) == "database" else "imports")
+                    inside(path, t, a)
                 if not dots and not targets:
                     _outside(a, module, link)
             for group in PY_IMPORT.findall(text):
                 for module in [m.strip() for m in group.split(",")]:
                     t = pyidx.get(module)
-                    if t and layer_of.get(t) != "tests":
-                        link(a, owner[t], "stores" if layer_of.get(t) == "database" else "imports")
-                    elif not t:
+                    if t:
+                        inside(path, t, a)
+                    else:
                         _outside(a, module, link)
             for prefix in PY_PREFIX.findall(text) + PY_ROUTE.findall(text):
                 seg = _segment(prefix)
                 if seg:
                     routes.setdefault(seg, a)
+                    route_file.setdefault(seg, path)
         elif ext in ("ts", "tsx", "js", "jsx", "mjs", "cjs", "vue", "svelte"):
             for spec in JS_IMPORT.findall(text):
                 t = _resolve_js(path, spec, paths)
                 if t:
-                    if layer_of.get(t) != "tests":
-                        link(a, owner[t], "stores" if layer_of.get(t) == "database" else "imports")
+                    inside(path, t, a)
                 elif not spec.startswith("."):
                     top = "/".join(spec.split("/")[:2]) if spec.startswith("@") else spec.split("/")[0]
                     if top in DB_PACKAGES:
@@ -174,6 +200,7 @@ def find_connections(root: Path, features: list) -> list:
                     seg = _segment(route)
                     if seg:
                         routes.setdefault(seg, a)
+                        route_file.setdefault(seg, path)
 
     # A frontend file that writes "/matters" next to fetch or api.get is calling the backend file that defines /matters.
     for path in sorted(paths):
@@ -187,6 +214,7 @@ def find_connections(root: Path, features: list) -> list:
                 seg = _segment(lit)
                 if seg in routes:
                     link(a, routes[seg], "calls")
+                    flink(path, route_file[seg], "calls")
 
     # Each feature's own frontend talks to its own backend, and its tests cover what it has.
     for f in features:
@@ -202,7 +230,21 @@ def find_connections(root: Path, features: list) -> list:
 
     out = [{"from": a, "to": b, "kind": k, "weight": n} for (a, b, k), n in edges.items()]
     out.sort(key=lambda e: (-e["weight"], e["from"], e["to"]))
-    return out[:MAX_EDGES]
+    files = [{"from": a, "to": b, "kind": k} for (a, b), k in sorted(file_links.items())]
+    return out[:MAX_EDGES], files[:MAX_FILE_LINKS]
+
+
+def _imports_of(path: str, text: str, ext: str, pyidx: dict, paths: set) -> list:
+    """The project files that one file imports."""
+    found: list = []
+    if ext == "py":
+        for dots, module, names in PY_FROM.findall(text):
+            found += _resolve_py(path, dots, module, [n.strip().split(" as ")[0].strip("() ") for n in names.split(",")], pyidx)
+        for group in PY_IMPORT.findall(text):
+            found += [pyidx[m.strip()] for m in group.split(",") if m.strip() in pyidx]
+    elif ext in ("ts", "tsx", "js", "jsx", "mjs", "cjs", "vue", "svelte"):
+        found += [t for t in (_resolve_js(path, spec, paths) for spec in JS_IMPORT.findall(text)) if t]
+    return found
 
 
 def _outside(a: str, module: str, link) -> None:

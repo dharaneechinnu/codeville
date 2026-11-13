@@ -7,8 +7,8 @@ export interface Pt {
 }
 /** The 21 landmarks of one hand, as the camera sees it (x from the left of the image, y from the top, both 0 to 1). */
 export type Hand = Pt[];
-export type Pose = 'open' | 'fist' | 'pinch' | 'other';
-export type GestureMode = 'idle' | 'rotate' | 'zoom' | 'hold' | 'reset';
+export type Pose = 'open' | 'fist' | 'pinch' | 'point' | 'other';
+export type GestureMode = 'idle' | 'rotate' | 'zoom' | 'hold' | 'reset' | 'point';
 
 /** What the view should do this frame. yaw and tilt are in radians, zoom is a distance factor (below 1 zooms in). */
 export interface GestureFrame {
@@ -18,6 +18,10 @@ export interface GestureFrame {
   zoom: number;
   reset: boolean;
   poses: Pose[];
+  /** Where the pointing finger aims, in camera-image space like the landmarks (not mirrored). Null when no hand points. */
+  cursor: { x: number; y: number } | null;
+  /** True on the one frame a pointing hand pinches: open the block under the cursor. */
+  click: boolean;
 }
 
 const WRIST = 0;
@@ -50,10 +54,14 @@ export function extended(h: Hand): number {
 export function poseOf(h: Hand): Pose {
   if (h.length < 21) return 'other';
   const size = handSize(h);
-  const n = extended(h);
-  if (dist(h[4]!, h[8]!) < size * 0.32) return 'pinch';
+  const w = h[WRIST]!;
+  const up = FINGERS.map(([tip, pip]) => dist(h[tip]!, w) > dist(h[pip]!, w) * 1.12);
+  const n = up.filter(Boolean).length;
+  // A pinch is the thumb on a finger that still reaches out. In a fist the thumb also rests on the index finger, but that finger is curled into the palm.
+  if (dist(h[4]!, h[8]!) < size * 0.32 && dist(h[8]!, w) > size) return 'pinch';
   if (n >= 4) return 'open';
   if (n === 0) return 'fist';
+  if (up[0] && n === 1) return 'point';
   return 'other';
 }
 
@@ -94,8 +102,11 @@ const STABLE_FRAMES = 3;
 const DOUBLE_PINCH_MS = 750;
 const RESET_COOLDOWN_MS = 1500;
 const LOST_FRAMES = 6;
+const AIM_KEEP_MS = 700; // a pinch this soon after pointing is a click on what was pointed at
+const AIM_BACK_MS = 90; // the click lands where the finger was just before it stopped pointing
 
-/** Turns hands into view moves. Open palm moves the town, two open hands zoom, a fist holds still, a double pinch resets. */
+/** Turns hands into view moves. Open palm moves the town, two open hands zoom, a fist holds still, a double pinch resets.
+ * One pointing finger aims a cursor, and a pinch while aiming clicks what the cursor is on. */
 export class GestureInterpreter {
   private fx = new OneEuro();
   private fy = new OneEuro();
@@ -111,6 +122,12 @@ export class GestureInterpreter {
   private pinchStarts: number[] = [];
   private lastReset = -1e9;
   private lost = 0;
+  private cx = new OneEuro(1.1, 4);
+  private cy = new OneEuro(1.1, 4);
+  private trail: { x: number; y: number; t: number }[] = [];
+  private aim: { x: number; y: number } | null = null;
+  private aimAt = -1e9;
+  private aimPinch = false;
 
   /** Keeps a pose only after it has been seen for a few frames in a row, so one bad frame does nothing. */
   private steady(raw: Pose[]): Pose[] {
@@ -140,8 +157,16 @@ export class GestureInterpreter {
     }
   }
 
+  private dropAim(): void {
+    this.aim = null;
+    this.aimPinch = false;
+    this.trail = [];
+    this.cx.reset();
+    this.cy.reset();
+  }
+
   update(raw: Hand[], now: number): GestureFrame {
-    const frame: GestureFrame = { mode: 'idle', yaw: 0, tilt: 0, zoom: 1, reset: false, poses: [] };
+    const frame: GestureFrame = { mode: 'idle', yaw: 0, tilt: 0, zoom: 1, reset: false, poses: [], cursor: null, click: false };
     const hands = raw
       .filter((h) => h.length >= 21)
       // The image is shown mirrored, so the left-most hand on screen comes first.
@@ -156,17 +181,68 @@ export class GestureInterpreter {
         this.pending = [];
         this.pendingCount = [];
         this.pinching = false;
+        this.dropAim();
       }
       frame.mode = this.mode === 'idle' ? 'idle' : this.mode;
       return frame;
     }
     this.lost = 0;
 
-    const poses = this.steady(hands.map(poseOf));
+    const rawPoses = hands.map(poseOf);
+    const poses = this.steady(rawPoses);
     frame.poses = poses;
 
-    // Double pinch: the thumb and finger meet twice within a short time.
+    // Pointing: one finger out aims a cursor at its tip. A pinch right after is a click where the finger was aiming.
+    const pointIdx = poses.indexOf('point');
     const pinchNow = poses.includes('pinch');
+    if (pointIdx >= 0 && !poses.includes('open')) {
+      // The cursor follows the fingertip only on frames that really show a pointing hand. The moment the thumb starts
+      // to move in, the cursor stays put, so the pinch cannot drag it off the block.
+      if (rawPoses[pointIdx] === 'point' || !this.aim) {
+        const tip = hands[pointIdx]![8]!;
+        const x = this.cx.filter(tip.x, now);
+        const y = this.cy.filter(tip.y, now);
+        this.trail.push({ x, y, t: now });
+        while (this.trail.length > 1 && now - this.trail[0]!.t > 500) this.trail.shift();
+        this.aim = { x, y };
+      }
+      const x = this.aim.x;
+      const y = this.aim.y;
+      this.aimAt = now;
+      this.aimPinch = false;
+      this.pinching = false;
+      this.enter('point');
+      frame.mode = 'point';
+      frame.cursor = { x: 1 - x, y };
+      return frame;
+    }
+    if (pinchNow && this.aim && (this.aimPinch || now - this.aimAt < AIM_KEEP_MS)) {
+      if (!this.aimPinch) {
+        const last = this.trail[this.trail.length - 1];
+        const back = last && ([...this.trail].reverse().find((p) => last.t - p.t >= AIM_BACK_MS) ?? this.trail[0]);
+        if (back) this.aim = { x: back.x, y: back.y };
+        this.aimPinch = true;
+        frame.click = true;
+      }
+      this.aimAt = now;
+      this.pinching = true; // this pinch is a click, so it does not count toward a double-pinch reset
+      this.mode = 'point';
+      frame.mode = 'point';
+      frame.cursor = { x: 1 - this.aim.x, y: this.aim.y };
+      return frame;
+    }
+    if (this.aim && now - this.aimAt >= AIM_KEEP_MS) this.dropAim();
+    this.aimPinch = false;
+    if (this.aim && !poses.includes('open') && !poses.includes('fist')) {
+      // Between pointing and pinching the hand has no clear pose for a moment: keep the cursor where it was.
+      this.pinching = false;
+      this.mode = 'point';
+      frame.mode = 'point';
+      frame.cursor = { x: 1 - this.aim.x, y: this.aim.y };
+      return frame;
+    }
+
+    // Double pinch: the thumb and finger meet twice within a short time.
     if (pinchNow && !this.pinching) {
       this.pinchStarts = this.pinchStarts.filter((t) => now - t < DOUBLE_PINCH_MS);
       this.pinchStarts.push(now);

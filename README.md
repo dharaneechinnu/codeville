@@ -14,7 +14,7 @@ block per file), a walking shopper that runs your tests, and short messages that
 | Widget | What it does |
 |---|---|
 | Chat | Type a prompt and send it to Claude Code. Shows what the agent did: edits, tools, sub-agents. |
-| Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
+| Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Flow**: the kind of app this is and its user flow, step by step, with the files behind each step. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
 | Files | The project by feature or by folder, with git badges. |
 | Source control | Stage, commit, commit and push, push. Failures say what broke and the next step. |
 
@@ -47,7 +47,7 @@ npm install
 npm start          # builds, then opens the window; the window starts the backend for you
 ```
 
-Tests: `npm test` (80 Python tests). Type check: `npm run typecheck`.
+Tests: `npm test` (the Python tests). Type check: `npm run typecheck`.
 
 For UI work: `npm run backend` in one terminal, `npm run dev:ui` in another, then open
 `http://localhost:5180/#base=http://127.0.0.1:<port>&token=<token>` (port and token are in `~/.code-visualizer/config.json`).
@@ -81,6 +81,83 @@ https://github.com/dharaneechinnu/codeville/releases/latest/download/Codeville-S
 To build the installer without releasing, run the Release workflow by hand from the Actions tab; the installer is kept
 with the run for 14 days.
 
+## Flow and templates
+
+Many projects are the same kind of app. Every online store has a catalog, a cart, a checkout and orders, whether it is
+Amazon or a ten-minute grocery app like Zepto or Blinkit. A **template** is that shared shape, written down once: the
+steps a user walks through, in order, and the words that name each step in code.
+
+The analysis (`match_template`, in `backend/visualizer/analysis/templates.py`) picks the template that fits the project
+and sorts the project's files into its steps. The **Flow** tab of the visualizer shows the result: the kind of app, the
+steps in order with how many frontend, backend and test files each has, the files behind the selected step (click to
+open), and the steps a typical app of this kind has that this project does not. In the town, the steps stand in order
+on one street, numbered, with a lit road between them.
+
+Templates today, written by hand: Online store, Social app, Blog or content site, Dashboard app. A project that fits
+none follows its layers (Screens, Logic, Data, Tests). To add a kind of app, add an entry to `TEMPLATES`.
+
+## Let Claude read the code
+
+File names only say so much: a cart kept in `utils.js` is invisible to a name-based guess. The Flow tab has a button,
+**Ask Claude to read the code**. It sends the connected Claude Code a request to read the project and write one small
+file, `.codeville/map.json`: the kind of app, the steps a user goes through in order, the files that do each step,
+each step's entry file, and one plain line per file. Claude changes nothing else.
+
+When the file is written the town rebuilds from it: each step becomes a house, the entry file its door, and pointing
+at any part shows Claude's line for that file. **Read again** refreshes the map after the code has changed; **Forget**
+goes back to the name-based guess. The app checks the map before using it: paths that are not in the project are
+dropped, and a map with fewer than two usable steps is ignored.
+
+Other agents can do the same over HTTP with the `project_map_request` and `save_project_map` tools. The map is a plain
+file in the project, so it can be committed and shared with the team.
+
+## Reading a building
+
+Each feature is one house, and each part of the house is a file. The kind of part says what the file is for, so a
+new person can read a project without opening anything:
+
+| Part | Colour | The file is |
+|---|---|---|
+| Door | Yellow, with a path to the street | The way in: the page or screen people enter through, or the routes file when there are no screens. |
+| Window | Light blue | A screen people see (a frontend file). |
+| Floor | Orange | The work inside (a backend file). |
+| Roof | Green | A test file. A house with no roof has no tests. |
+| Grey walls | Grey | Plain structure that carries windows. Not a file. |
+
+Point at any part to see `Door · Cart.tsx` and so on; click or pinch to open it. The database stays its own building
+and outside services are small blocks.
+
+## Building styles
+
+The style of the houses is chosen from the kind of app. The style is chosen from the kind of app the project is, so different projects look different at a glance:
+
+| Kind of app | Style | What you see |
+|---|---|---|
+| Online store | Market street | Shop windows, striped awnings, a sign board on the roof. |
+| Social app | Apartment blocks | Balconies, a water tank and a stair house on the roof. |
+| Blog or content site | Library row | Arched windows, columns and steps, a pitched roof. |
+| Dashboard app | Glass offices | Glass walls, a set-back crown, a mast or a helipad. |
+| General app | Workshops | Brick walls, a roller door, a saw-tooth roof and a chimney. |
+
+The style changes the wall surface, the shape of the roof pieces and the trim over the ground floor. The styles are
+designed by hand in `src/renderer/buildings.ts`.
+
+## Hand control
+
+The hand button in the Build view turns the town into a full-window hologram and tracks your hand with the camera
+(MediaPipe, on this computer; the picture is never shown or sent anywhere). Esc or the same button leaves it.
+
+| Gesture | What it does |
+|---|---|
+| Point (one finger) | Aims a cursor at the fingertip; the block under it lights up and shows its file name. |
+| Pinch while pointing | Opens that block's file in the editor docked on the right, with the AI prompt under it. |
+| Open hand | Turns and tilts the town. |
+| Two open hands | Zoom. |
+| Fist | Holds still. |
+| Double pinch (without pointing) | Resets the view. |
+
+The rules live in `src/renderer/gesture.ts` and are checked without a camera by `npm run test:gestures`.
+
 ## Project analysis agent
 
 When you import a project, an analysis agent (`backend/visualizer/analysis`) runs six tools in order and reports each
@@ -90,6 +167,9 @@ services (from package files, `.env` examples and docker-compose), how many file
 It then traces how the buildings connect (`find_connections`): imports between files, frontend calls matched to the
 backend routes they hit, files that talk to the database, and files that use an outside service. The town draws these
 as links with small packets moving along them (Links: main, all or off); click a building to see only its links.
+It also keeps the links between single files (`fileLinks` in the report: which file imports, calls, stores through or
+tests which). Point at a block to see its file name; select it and the town draws a wire to every block that file is
+linked to, and the panel lists those files as buttons that jump to them.
 It also finds the project's own test, lint, type check and build commands and the folder each runs in (`find_commands`:
 for example pytest from `backend`, `npm run build` from `frontend`), and lists the test cases written in the test files
 (`find_tests`). The Test view builds its play buttons from these and shows the cases before a run. When a run stops
@@ -97,6 +177,23 @@ before any test starts, the message says the real reason (no package.json, missi
 A feature groups the files about the same thing across layers, for example `matters.py`, `MatterList.tsx` and
 `test_matters.py`. The town gives each feature its own district with a separate building per layer, colors blocks by layer, shows the database as its own building and each outside service as a
 small block. The same tools are available to agents as `analyze_project`, `detect_stack`, `find_features`, `find_connections`, `find_commands` and `find_tests`.
+
+## Chat: your own Claude Code, as one conversation
+
+The Chat runs the Claude Code that is installed and signed in on this computer. Nothing is sent through Codeville's
+own servers and no key is stored: it is the same `claude` command you use in a terminal.
+
+- **It remembers.** A project keeps its Claude Code session, so each prompt continues the conversation
+  (`claude -p --resume <session>`). The new-session button starts a clean one; picking an older session continues that one.
+- **It streams.** The app reads Claude Code's native stream (`--output-format stream-json`): the words as they are
+  written, each tool as it is used, and how the turn ended.
+- **It can use Codeville.** Claude Code gets the Codeville tools (`plugin/code-visualizer/scripts/mcp.mjs`, an MCP
+  server with no dependencies): the project map, current problems, git state, running checks and saving a project map.
+- **It says what is wrong.** Extensions and the Chat show whether Claude Code is installed and signed in, and what to
+  do when it is not.
+
+This works without the plugin. The plugin (below) adds two things: Codeville also follows Claude Code when you run it
+yourself in a terminal, and that terminal session gets the same tools.
 
 ## Connect Claude Code
 
@@ -123,6 +220,8 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `recent_events` | The latest events, optionally filtered by type. |
 | `current_problems` | The newest failing test, lint, type or build run: what broke, where, what is next. |
 | `run_check` | Runs the project's own test, lint, type check or build and returns the same crisp result. |
+| `project_map_request` | The instructions, JSON shape and file list for describing the project. |
+| `save_project_map` | Saves the agent's description; the town is rebuilt from it. |
 | `git_status` | Branch, staged and changed files, ahead and behind. |
 
 `GET /api/tools` lists them with their JSON schemas. `POST /api/tools/<name>` calls one.
@@ -139,8 +238,9 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `GET`/`POST /api/ai/settings`, `POST /api/ai/test`, `/api/ai/edit` | AI providers and keys (keys are write-only), a test call, and a proposed edit of one file. |
 | `POST /api/run`, `/api/stop` | Run or stop a command. |
 | `POST /api/git/changes`, `/stage`, `/commit`, `/push` | Source control. |
-| `POST /api/agent/send` | Send a prompt to an AI engine (`engine`: `claude` or `copilot`). |
+| `POST /api/agent/send` | Send a prompt to an AI engine (`engine`: `claude`, `copilot`, `codex`, ...). Claude Code continues the project's conversation. |
 | `GET /api/engines`, `POST /api/engines/login` | The AI engines on this computer, and their sign-in. |
+| `POST /api/map/prompt`, `/api/map/clear` | The request that asks the agent to map the project; forget the agent's map. |
 | `GET /api/project/templates`, `POST /api/project/new`, `/clone` | Start a project. |
 | `GET /api/doctor` | First-run checks for Git, Claude Code and Node.js. |
 

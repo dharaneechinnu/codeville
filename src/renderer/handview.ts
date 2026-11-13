@@ -16,8 +16,8 @@ const PALM = [0, 5, 9, 13, 17];
 const SMOOTH = 0.5; // share of the way each point moves toward a new reading
 const FADE_MS = 220;
 
-const COLOR: Record<GestureMode, string> = { idle: '#5cf2ff', rotate: '#5cf2ff', zoom: '#8ab4ff', hold: '#fbbc05', reset: '#34d399' };
-const WORD: Record<GestureMode, string> = { idle: 'TRACKING', rotate: 'TURN', zoom: 'ZOOM', hold: 'HOLD', reset: 'RESET' };
+const COLOR: Record<GestureMode, string> = { idle: '#5cf2ff', rotate: '#5cf2ff', zoom: '#8ab4ff', hold: '#fbbc05', reset: '#34d399', point: '#ff7ad9' };
+const WORD: Record<GestureMode, string> = { idle: 'TRACKING', rotate: 'TURN', zoom: 'ZOOM', hold: 'HOLD', reset: 'RESET', point: 'AIM' };
 
 interface Tracked { pts: P[]; seen: number; alpha: number; pose: Pose }
 
@@ -30,6 +30,16 @@ export class HandView {
   private pulses: { at: P; t0: number }[] = [];
   private spin = 0;
   private last = 0;
+  private cursor: P | null = null;
+  private onBlock = false;
+  private clicks: { at: P; t0: number }[] = [];
+
+  /** Where the pointing finger aims (canvas pixels), whether a block is under it, and whether it just clicked. */
+  aim(at: P | null, onBlock: boolean, clicked: boolean, now: number): void {
+    this.cursor = at;
+    this.onBlock = onBlock;
+    if (at && clicked) this.clicks.push({ at, t0: now });
+  }
 
   /** Takes one tracker reading. `toScreen` maps a landmark to canvas pixels (the picture is shown mirrored). */
   update(raw: Hand[], frame: GestureFrame, now: number, toScreen: (p: { x: number; y: number }) => P): void {
@@ -62,6 +72,13 @@ export class HandView {
     const col = COLOR[this.mode];
     for (const h of this.hands) this.drawHand(g, h, col, dpr);
     if (this.mode === 'zoom' && this.hands.length >= 2) this.drawZoom(g, center(this.hands[0]!.pts), center(this.hands[1]!.pts), dpr);
+    if (this.cursor) this.drawCursor(g, this.cursor, dpr);
+    this.clicks = this.clicks.filter((c) => now - c.t0 < 450);
+    for (const c of this.clicks) {
+      const k = (now - c.t0) / 450;
+      g.beginPath(); g.arc(c.at.x, c.at.y, (14 + 46 * k) * dpr, 0, Math.PI * 2);
+      g.strokeStyle = `rgba(255,255,255,${1 - k})`; g.lineWidth = 2.5 * dpr; g.stroke();
+    }
     this.pulses = this.pulses.filter((p) => now - p.t0 < 700);
     for (const p of this.pulses) {
       const k = (now - p.t0) / 700;
@@ -133,6 +150,29 @@ export class HandView {
       }
     }
     g.beginPath(); g.arc(0, 0, 2.5 * dpr, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
+  /** The aiming cursor: a ring with a gap-cross. Over a block it closes up and says what a pinch will do. */
+  private drawCursor(g: CanvasRenderingContext2D, c: P, dpr: number): void {
+    const col = this.onBlock ? '#ffffff' : COLOR.point, r = (this.onBlock ? 13 : 17) * dpr;
+    g.save();
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = (this.onBlock ? 2.6 : 1.8) * dpr;
+    g.shadowColor = COLOR.point; g.shadowBlur = 12 * dpr;
+    g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.stroke();
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2;
+      g.beginPath(); g.moveTo(c.x + Math.cos(a) * r * 1.25, c.y + Math.sin(a) * r * 1.25); g.lineTo(c.x + Math.cos(a) * r * 1.75, c.y + Math.sin(a) * r * 1.75); g.stroke();
+    }
+    g.beginPath(); g.arc(c.x, c.y, 2.4 * dpr, 0, Math.PI * 2); g.fill();
+    if (this.onBlock) {
+      g.shadowBlur = 0;
+      g.font = `700 ${10 * dpr}px "JetBrains Mono", Consolas, monospace`;
+      const word = 'PINCH TO OPEN', w = g.measureText(word).width + 14 * dpr, hh = 18 * dpr, x = c.x - w / 2, y = c.y + r * 1.9;
+      g.fillStyle = 'rgba(2,12,18,0.85)'; g.strokeStyle = COLOR.point; g.lineWidth = dpr;
+      g.beginPath(); g.roundRect(x, y, w, hh, hh / 2); g.fill(); g.stroke();
+      g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(word, c.x, y + hh / 2 + dpr);
+    }
     g.restore();
   }
 

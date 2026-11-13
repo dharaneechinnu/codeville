@@ -3,9 +3,11 @@ import { crisp, type CvEvent } from '../shared/events.js';
 import { useCv } from './state.js';
 import { TestStage, type StageStep } from './teststage.js';
 import { Ico } from './icons.js';
-import type { Analysis, LinkKind } from '../shared/types.js';
+import type { Analysis, FlowStep, LinkKind } from '../shared/types.js';
 import { GestureLayer } from './gesturelayer.js';
+import { EditorDock } from './popups.js';
 import { LAYER_COLOR, LINK_COLOR, Town, type LinkMode, type Pick } from './town.js';
+import { STYLE_NAME, styleFor } from './buildings.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -13,7 +15,7 @@ const OPEN_ICON = (
   </svg>
 );
 
-type Tab = 'build' | 'test';
+type Tab = 'build' | 'flow' | 'test';
 
 const LAYER_NAMES: [keyof typeof LAYER_COLOR, string][] = [
   ['frontend', 'Frontend'], ['backend', 'Backend'], ['database', 'Database'], ['tests', 'Tests'],
@@ -40,8 +42,38 @@ function buildingOfPath(a: Analysis, path: string): string | null {
   return null;
 }
 
-/** How one building is wired to the rest: who it calls, what it stores, which services it uses, what it imports. */
-function Connections({ a, id }: { a: Analysis; id: string }): JSX.Element | null {
+/** How one file (one block) is wired to other files. Each name is a button that jumps to that block. */
+function FileLinks({ a, path, onGo }: { a: Analysis; path: string; onGo: (path: string) => void }): JSX.Element {
+  const links = a.fileLinks ?? [];
+  const out = (k: LinkKind): string[] => links.filter((e) => e.from === path && e.kind === k).map((e) => e.to);
+  const into = (k: LinkKind): string[] => links.filter((e) => e.to === path && e.kind === k).map((e) => e.from);
+  const rows: [string, LinkKind, string[]][] = [
+    ['Imports', 'imports', out('imports')], ['Imported by', 'imports', into('imports')],
+    ['Calls', 'calls', out('calls')], ['Called by', 'calls', into('calls')],
+    ['Stores in', 'stores', out('stores')], ['Stored here by', 'stores', into('stores')],
+    ['Covers', 'tests', out('tests')], ['Tested by', 'tests', into('tests')],
+  ];
+  const shown = rows.filter(([, , v]) => v.length);
+  return (
+    <>
+      <b>{path.split('/').pop()}</b>
+      {shown.length === 0 && <p className="mut small">No links found from this file to other files.</p>}
+      {shown.map(([label, kind, files]) => (
+        <div key={label} className="crow2">
+          <span style={{ color: LINK_COLOR[kind] }}>{label}</span>
+          <span className="tags">
+            {files.slice(0, 8).map((f) => <button key={f} className="tag go" title={`Go to ${f}`} onClick={() => onGo(f)}>{f.split('/').pop()}</button>)}
+            {files.length > 8 && <span className="tag">+{files.length - 8}</span>}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** How one building is wired to the rest: who it calls, what it stores, which services it uses, what it imports.
+ * When a file is selected, its own file-to-file links come first. */
+function Connections({ a, id, path, onGo }: { a: Analysis; id: string; path: string | null; onGo: (path: string) => void }): JSX.Element | null {
   const out = (k: LinkKind): string[] => a.connections.filter((e) => e.from === id && e.kind === k).map((e) => nameOf(a, e.to));
   const into = (k: LinkKind): string[] => a.connections.filter((e) => e.to === id && e.kind === k).map((e) => nameOf(a, e.from));
   const rows: [string, LinkKind, string[]][] = [
@@ -54,7 +86,9 @@ function Connections({ a, id }: { a: Analysis; id: string }): JSX.Element | null
   const shown = rows.filter(([, , v]) => v.length);
   return (
     <div className="conn" role="region" aria-label="Connections">
-      <b>{nameOf(a, id)}</b>
+      {path && <FileLinks a={a} path={path} onGo={onGo} />}
+      {path && <hr />}
+      <b>{path ? <span className="mut">Building · </span> : null}{nameOf(a, id)}</b>
       {shown.length === 0 && <p className="mut small">Nothing detected linking to this building.</p>}
       {shown.map(([label, kind, names]) => (
         <div key={label} className="crow2">
@@ -107,6 +141,17 @@ function About(): JSX.Element | null {
               </div>
             ))}
           </dl>
+          <div className="abrow">
+            <dt>Buildings</dt>
+            <dd><span className="tag">{STYLE_NAME[styleFor(a.flow)]}</span><span className="mut small"> because this is {a.flow && a.flow.template.id !== 'general' ? `an ${a.flow.template.name.toLowerCase()}`.replace(/^an (?![aeio])/, 'a ') : 'a general app'}</span></dd>
+          </div>
+          <ul className="readkey" aria-label="How to read a building">
+            <li><i className="k-door" /><b>Door</b> the way in: the page or route people enter through</li>
+            <li><i className="k-window" /><b>Window</b> a screen people see (frontend file)</li>
+            <li><i className="k-floor" /><b>Floor</b> the work inside (backend file)</li>
+            <li><i className="k-roof" /><b>Roof</b> a test file. No roof means no tests.</li>
+            <li><i className="k-shell" /><b>Grey</b> plain structure, not a file</li>
+          </ul>
           <div className="legend" aria-label="Block colors">
             {LAYER_NAMES.map(([k, name]) => (
               <span key={k}><i style={{ background: LAYER_COLOR[k] }} />{name} {a.layers[k]}</span>
@@ -178,6 +223,9 @@ export function VizWidget(): JSX.Element {
         <button role="tab" aria-selected={tab === 'build'} onClick={() => setTab('build')}>
           Build
         </button>
+        <button role="tab" aria-selected={tab === 'flow'} onClick={() => setTab('flow')} title="How a user moves through this app, step by step, and the files behind each step">
+          Flow
+        </button>
         <button
           role="tab"
           aria-selected={tab === 'test'}
@@ -192,13 +240,120 @@ export function VizWidget(): JSX.Element {
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
       </div>
-      {tab === 'build' ? <BuildView /> : <TestView />}
+      {tab === 'build' ? <BuildView /> : tab === 'flow' ? <FlowView onShowInTown={() => setTab('build')} /> : <TestView />}
+    </div>
+  );
+}
+
+/** The user flow: the kind of app this is, the steps a user walks through, and the files of this project behind each step. */
+function FlowView({ onShowInTown }: { onShowInTown: () => void }): JSX.Element {
+  const { analysis, openEditor, select, askMap, clearMap, mapping } = useCv();
+  const flow = analysis?.flow;
+  const [openId, setOpenId] = useState<string | null>(null);
+  if (!analysis || !flow) return <p className="mut pad">Open a project to see its flow.</p>;
+  const general = flow.template.id === 'general';
+  const byAgent = flow.source === 'agent';
+  const notes = analysis.notes ?? {};
+  const current: FlowStep | undefined = flow.steps.find((s) => s.id === openId && s.found) ?? flow.steps.find((s) => s.found);
+  const missing = flow.steps.filter((s) => !s.found);
+  return (
+    <div className="flowview">
+      <header className="flhead">
+        <div>
+          <span className="mut small">{byAgent ? 'Claude read the code. This is' : general ? 'No known kind of app matched' : 'From the file names, this looks like'}</span>
+          <b>{flow.template.name}</b>
+          {flow.template.examples.length > 0 && <span className="mut small">the same shape as {flow.template.examples.join(', ')}</span>}
+        </div>
+        <p>{flow.template.about}</p>
+        <span className={`chip ${flow.found === flow.total ? 'ok' : ''}`}>{byAgent ? `${flow.total} steps` : `${flow.found} of ${flow.total} steps found`}</span>
+      </header>
+
+      <div className={`flask ${byAgent ? 'done' : ''}`}>
+        {mapping ? (
+          <span className="flbusy" role="status"><span className="aispin" aria-hidden="true" />Claude is reading the code. The town rebuilds when it is done.</span>
+        ) : byAgent ? (
+          <>
+            <span><b>Read by Claude.</b> Steps, doors and the line under each file come from the code itself, not from file names.</span>
+            <button className="btn sm" onClick={() => void askMap()}>Read again</button>
+            <button className="btn sm" onClick={() => void clearMap()} title="Go back to what the file names say">Forget</button>
+          </>
+        ) : (
+          <>
+            <span><b>This is a guess from file names.</b> Claude can read the code and map it properly: the real steps, each step's entry file, and what every file does.</span>
+            <button className="big" onClick={() => void askMap()}>Ask Claude to read the code</button>
+          </>
+        )}
+      </div>
+
+      <ol className="flsteps" aria-label="User flow">
+        {flow.steps.map((s, i) => (
+          <li key={s.id}>
+            <button className={`flstep ${s.found ? '' : 'missing'} ${current?.id === s.id ? 'on' : ''}`} disabled={!s.found} aria-pressed={current?.id === s.id} onClick={() => setOpenId(s.id)}>
+              <i>{i + 1}</i>
+              <b>{s.name}</b>
+              <span>{s.about}</span>
+              {s.found ? (
+                <em>
+                  {LAYER_NAMES.filter(([k]) => s.layers[k] > 0).map(([k, name]) => (
+                    <u key={k} title={`${s.layers[k]} ${name.toLowerCase()} files`}><i style={{ background: LAYER_COLOR[k] }} />{s.layers[k]}</u>
+                  ))}
+                </em>
+              ) : (
+                <em className="none">Not in this project yet</em>
+              )}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {current && (
+        <section className="fldetail" aria-label={`Files for ${current.name}`}>
+          <div className="fldh">
+            <b>{current.name}</b>
+            <span className="mut small">{current.files.length} {current.files.length === 1 ? 'file' : 'files'} do this step. Click one to open it.</span>
+            <span className="sp" />
+            <button
+              className="btn sm"
+              onClick={() => {
+                select(current.files[0]?.path ?? null);
+                onShowInTown();
+              }}
+            >
+              Show in the town
+            </button>
+          </div>
+          <div className="flcols">
+            {LAYER_NAMES.filter(([k]) => current.layers[k] > 0).map(([k, name]) => (
+              <div key={k} className="flcol">
+                <h4><i style={{ background: LAYER_COLOR[k] }} />{name}</h4>
+                {current.files.filter((f) => f.layer === k).map((f) => (
+                  <button key={f.path} className="flfile" title={f.path} onClick={() => openEditor(f.path)}>
+                    <b>{f.path.split('/').pop()}{current.entry === f.path && <em className="doorchip">door</em>}</b>
+                    <span>{notes[f.path] ?? f.path.split('/').slice(0, -1).join('/')}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {missing.length > 0 && !general && (
+        <p className="flnote">
+          <b>Missing:</b> {missing.map((s) => s.name).join(', ')}. A typical {flow.template.name.toLowerCase()} has {missing.length === 1 ? 'this step' : 'these steps'}; no file in this project does {missing.length === 1 ? 'it' : 'them'} yet.
+        </p>
+      )}
+      {flow.others.length > 0 && (
+        <p className="flnote mut">
+          <b>Not part of the flow:</b> {flow.others.map((o) => `${o.name} (${o.files})`).join(', ')}. Shared code that the steps above use.
+        </p>
+      )}
     </div>
   );
 }
 
 function BuildView(): JSX.Element {
-  const { analysis, townRef, select, openEditor, selected } = useCv();
+  const { analysis, townRef, select, openEditor, selected, editorOpen, editorDocked, setEditorDocked } = useCv();
   const host = useRef<HTMLDivElement>(null);
   const [webgl, setWebgl] = useState(true);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -237,13 +392,21 @@ function BuildView(): JSX.Element {
     townRef.current?.setLinkMode(mode);
   }, [mode, townRef]);
 
+  // The docked editor belongs to hand control: leaving it (or this tab) turns the editor back into a floating window.
+  useEffect(() => {
+    if (!hands) setEditorDocked(false);
+  }, [hands, setEditorDocked]);
+  useEffect(() => () => setEditorDocked(false), [setEditorDocked]);
+
   const t = (): Town | null => townRef.current;
   const shown = selected ?? pick?.path ?? null;
+  const docked = hands && editorOpen && editorDocked;
 
   return (
-    <div className={`stage${hands ? ' holo' : ''}`}>
+    <div className={`stage${hands ? ' holo' : ''}${docked ? ' split' : ''}`}>
       <div className="viewport" ref={host} />
-      {hands && <GestureLayer getTown={() => townRef.current} onClose={() => setHands(false)} />}
+      {hands && <GestureLayer getTown={() => townRef.current} onClose={() => setHands(false)} onOpen={(path) => openEditor(path, { dock: true })} />}
+      {docked && <EditorDock />}
       {!webgl && <div className="nogl">This computer cannot draw the 3D town. The Test view and the lists still work.</div>}
       <div className="tools" role="toolbar" aria-label="View controls">
         <button onClick={() => t()?.rotate(-Math.PI / 4)} title="Rotate left" aria-label="Rotate left"><Ico name="rotateLeft" /></button>
@@ -254,7 +417,7 @@ function BuildView(): JSX.Element {
         <button onClick={() => t()?.zoom(1.25)} title="Zoom out" aria-label="Zoom out"><Ico name="minus" /></button>
         <button onClick={() => t()?.overview()} title="Reset the view" aria-label="Reset the view"><Ico name="home" /></button>
         <button onClick={() => t()?.wholeProject()} title="See the whole project from above" aria-label="Whole project"><Ico name="whole" /></button>
-        <button className={hands ? 'on' : ''} onClick={() => setHands(!hands)} title="Hand control: move and zoom the town with your hand in front of the camera" aria-label="Hand control" aria-pressed={hands}><Ico name="hand" /></button>
+        <button className={hands ? 'on' : ''} onClick={() => setHands(!hands)} title={hands ? 'Leave hand control (Esc)' : 'Hand control: turn the town, point at a block and pinch to open its file, with your hand in front of the camera'} aria-label="Hand control" aria-pressed={hands}><Ico name="hand" />{hands && <em>exit</em>}</button>
         <button className="modebtn" onClick={() => setMode(NEXT_MODE[mode])} title={`${MODE_NAME[mode]}. Click to change: main links, all links, or none.`} aria-label={MODE_NAME[mode]}><Ico name="links" /><em>{mode}</em></button>
       </div>
       {shown && (
@@ -271,7 +434,15 @@ function BuildView(): JSX.Element {
       {!analysis && <div className="nogl">Open a project to build its town.</div>}
       {analysis && (pick?.buildingId || shown) && (
         <div className="connwrap" style={{ top: shown ? 60 : 8 }}>
-          <Connections a={analysis} id={pick?.buildingId ?? buildingOfPath(analysis, shown ?? '') ?? ''} />
+          <Connections
+            a={analysis}
+            id={(shown ? buildingOfPath(analysis, shown) : null) ?? pick?.buildingId ?? ''}
+            path={shown}
+            onGo={(p) => {
+              setPick(null);
+              select(p);
+            }}
+          />
         </div>
       )}
       <About />

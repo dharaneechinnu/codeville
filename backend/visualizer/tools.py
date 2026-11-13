@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import state
-from .analysis import steps
+from .analysis import agentmap, steps
 from .analysis.commands import find_commands, find_tests
 from .analysis.connections import find_connections
 from .analyzer import analyze_project
@@ -109,6 +109,27 @@ def detect_stack_tool(args: dict, hub: EventHub) -> dict:
     root = Path(_project_root(args))
     files = steps.scan_files(root)["files"]
     return steps.detect_stack(root, files)
+
+
+def project_map_request(args: dict, hub: EventHub) -> dict:
+    """The instructions for describing the project, with the exact shape of the map and the file list."""
+    root = Path(_project_root(args))
+    files = steps.scan_files(root)["files"]
+    steps.classify_layers(files, steps.detect_stack(root, files))
+    return {"instructions": agentmap.map_prompt(files), "file": agentmap.MAP_FILE, "saveWith": "save_project_map"}
+
+
+def save_project_map(args: dict, hub: EventHub) -> dict:
+    """Saves the map an agent wrote after reading the code. The town is rebuilt from it."""
+    root = Path(_project_root(args))
+    files = steps.scan_files(root)["files"]
+    steps.classify_layers(files, steps.detect_stack(root, files))
+    try:
+        out = agentmap.save_map(root, args.get("map"), files)
+    except ValueError as err:
+        raise ToolError(f"The map was not saved. {err} Call project_map_request for the exact shape and the file list.") from err
+    hub.push({"type": "file.change", "source": "app", "path": agentmap.MAP_FILE, "op": "edit"})
+    return out
 
 
 def find_connections_tool(args: dict, hub: EventHub) -> dict:
@@ -238,6 +259,22 @@ TOOLS: dict = {
             {"type": "object", "properties": {
                 "path": {"type": "string"}, "max_links": {"type": "integer", "description": "Links to return, strongest first. Default 60."}}},
             find_connections_tool,
+        ),
+        Tool(
+            "project_map_request",
+            "How to describe this project for the town: the instructions, the exact JSON shape of the map, and the list of files. "
+            "Read the code, then send the map with save_project_map.",
+            {"type": "object", "properties": {"path": {"type": "string"}}},
+            project_map_request,
+        ),
+        Tool(
+            "save_project_map",
+            "Saves your description of the project after you have read the code: the kind of app, the steps a user goes through in order, "
+            "the files that do each step, each step's entry file, and one plain line per file. The town is rebuilt from it: each step becomes "
+            "a house, the entry file its door.",
+            {"type": "object", "required": ["map"], "properties": {
+                "map": {"type": "object", "description": "The map, in the shape project_map_request describes."}, "path": {"type": "string"}}},
+            save_project_map,
         ),
         Tool(
             "find_commands",

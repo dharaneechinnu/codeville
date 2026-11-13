@@ -45,8 +45,12 @@ interface Ctx {
   selected: string | null;
   select: (path: string | null) => void;
   editorFile: string | null;
-  /** Opens a file in the editor; with { ai: true } the AI prompt is focused, ready to type. */
-  openEditor: (path: string, opts?: { ai?: boolean }) => void;
+  /** Opens a file in the editor; with { ai: true } the AI prompt is focused, ready to type. { dock: true } opens it
+   * fixed to the right of the town instead of as a floating window; without `dock` the editor stays where it is. */
+  openEditor: (path: string, opts?: { ai?: boolean; dock?: boolean }) => void;
+  /** The editor is fixed to the right of the town (hand control) instead of floating. */
+  editorDocked: boolean;
+  setEditorDocked: (v: boolean) => void;
   /** Goes up each time the editor is opened for an AI edit. */
   editorAsk: number;
   terminalOpen: boolean;
@@ -60,9 +64,16 @@ interface Ctx {
   refreshGit: () => Promise<void>;
   gitAct: (path: string, body: Record<string, unknown>) => Promise<boolean>;
   run: (command: string, cwd?: string) => Promise<void>;
-  sendPrompt: (prompt: string, model: string, engine?: string) => Promise<boolean>;
+  /** Sends a prompt to an AI engine. Claude Code continues the project's conversation unless `fresh` starts a new one or `sessionId` names another. */
+  sendPrompt: (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string }) => Promise<boolean>;
   agentLines: string[];
   agentRunning: boolean;
+  /** Asks the connected agent to read the code and write the project map; the town rebuilds when it has. */
+  askMap: () => Promise<void>;
+  /** Forgets the agent's map and goes back to what the file names say. */
+  clearMap: () => Promise<void>;
+  /** The agent is reading the code for the map right now. */
+  mapping: boolean;
   stopAgent: () => Promise<void>;
 }
 
@@ -105,8 +116,10 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [editorAsk, setEditorAsk] = useState(0);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDocked, setEditorDocked] = useState(false);
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [agentRun, setAgentRun] = useState<string | null>(null);
+  const [agentSince, setAgentSince] = useState(0);
 
   const { events, output, connected } = useEventStream(useCallback((e: CvEvent) => townRef.current?.handleEvent(e), []));
 
@@ -213,10 +226,12 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   );
 
   const sendPrompt = useCallback(
-    async (prompt: string, model: string, engine = 'claude'): Promise<boolean> => {
+    async (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string }): Promise<boolean> => {
       if (!root) return false;
       try {
-        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, engine });
+        const sentAt = Date.now() - 500;
+        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, fresh: opts?.fresh ?? false, sessionId: opts?.sessionId ?? '', engine: opts?.engine ?? 'claude' });
+        setAgentSince(sentAt);
         setAgentRun(r.runId);
         return true;
       } catch (err) {
@@ -228,6 +243,35 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
     [root],
   );
 
+  const [mapping, setMapping] = useState(false);
+  const askMap = useCallback(async () => {
+    if (!root) return;
+    try {
+      const { prompt } = await api<{ prompt: string }>('/api/map/prompt', { path: root });
+      if (await sendPrompt(prompt, '')) setMapping(true);
+    } catch (err) {
+      setNote({ kind: 'err', title: 'Could not ask Claude', broke: err instanceof Error ? err.message : '', next: 'Check that Claude Code is connected in Extensions.' });
+    }
+  }, [root, sendPrompt]);
+  const clearMap = useCallback(async () => {
+    if (!root) return;
+    await api('/api/map/clear', { path: root }).catch(() => undefined);
+    await openProject(root);
+  }, [root, openProject]);
+
+  // The town follows the map: rebuild when the agent finishes reading, or whenever the map file is written.
+  useEffect(() => {
+    if (!last || !root) return;
+    const wrote = last.type === 'file.change' && last.path.replace(/\\/g, '/').endsWith('.codeville/map.json');
+    const finished = mapping && last.type === 'turn.end';
+    if (!wrote && !finished) return;
+    if (finished) setMapping(false);
+    const t = window.setTimeout(() => void openProject(root), 400);
+    return () => window.clearTimeout(t);
+    // Runs once per new event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [last]);
+
   const stopAgent = useCallback(async () => {
     if (agentRun) await api('/api/stop', { runId: agentRun }).catch(() => undefined);
   }, [agentRun]);
@@ -235,28 +279,31 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const agentLines = useMemo(() => (agentRun ? output.filter((o) => o.runId === agentRun).map((o) => o.line) : []), [output, agentRun]);
   const agentRunning = useMemo(() => {
     if (!agentRun) return false;
+    // Only an ending that came after this prompt was sent counts; earlier turns ended too.
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
+      if (e && e.ts < agentSince) break;
       if (e?.type === 'turn.end' && e.source === 'app') return false;
     }
     return true;
-  }, [events, agentRun]);
+  }, [events, agentRun, agentSince]);
 
   const select = useCallback((path: string | null) => {
     setSelected(path);
     townRef.current?.select(path);
   }, []);
 
-  const openEditor = useCallback((path: string, opts?: { ai?: boolean }) => {
+  const openEditor = useCallback((path: string, opts?: { ai?: boolean; dock?: boolean }) => {
     setEditorFile(path);
     setEditorOpen(true);
+    if (opts?.dock !== undefined) setEditorDocked(opts.dock);
     if (opts?.ai) setEditorAsk((n) => n + 1);
   }, []);
 
   const value: Ctx = {
-    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk,
+    root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk, editorDocked, setEditorDocked,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
-    sendPrompt, agentLines, agentRunning, stopAgent,
+    sendPrompt, agentLines, agentRunning, stopAgent, askMap, clearMap, mapping,
   };
   return <CvContext.Provider value={value}>{children}</CvContext.Provider>;
 }
