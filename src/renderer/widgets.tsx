@@ -4,6 +4,8 @@ import { useCv, type Note } from './state.js';
 import { Ico } from './icons.js';
 import { useAgentLink } from './agentlink.js';
 import { openEngines, useEngines } from './engines.js';
+import { TeamRunCard, TeamToggle, useTeam } from './team.js';
+import { api } from './api.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -92,7 +94,7 @@ function toLines(events: CvEvent[]): Line[] {
 }
 
 export function ChatWidget(): JSX.Element {
-  const { events, root, git, sendPrompt, agentLines, agentRunning, stopAgent, note, setNote, openEditor } = useCv();
+  const { events, root, git, sendPrompt, agentLines, agentRunning, stopAgent, note, setNote, openEditor, analysis, askMap, mapping } = useCv();
   const [text, setText] = useState('');
   const [model, setModel] = useState('');
   const [menu, setMenu] = useState(false);
@@ -100,6 +102,19 @@ export function ChatWidget(): JSX.Element {
   const { engines } = useEngines();
   const [engine, setEngine] = useState(() => localStorage.getItem('cv.chat.engine') ?? 'claude');
   const [engMenu, setEngMenu] = useState(false);
+  // Team mode: the prompt goes to the Lead, who picks the specialists it needs. The team runs on Claude Code.
+  const [teamOn, setTeamOn] = useState(() => localStorage.getItem('cv.chat.team') === '1');
+  const setTeam = (v: boolean): void => {
+    setTeamOn(v);
+    try {
+      localStorage.setItem('cv.chat.team', v ? '1' : '0');
+    } catch {
+      // Remembering the switch is a convenience only.
+    }
+  };
+  const { run: teamRun } = useTeam();
+  const myTeamRun = teamRun && root && teamRun.root.replace(/[\\/]+$/, '').toLowerCase() === root.replace(/[\\/]+$/, '').toLowerCase() ? teamRun : null;
+  const teamBusy = !!myTeamRun && !['done', 'stopped', 'failed'].includes(myTeamRun.state);
   const engineLabel = engines?.find((e) => e.id === engine)?.label ?? (engine === 'claude' ? 'Claude Code' : engine);
   const pickEngine = (id: string): void => {
     setEngine(id);
@@ -113,6 +128,19 @@ export function ChatWidget(): JSX.Element {
   const [newSince, setNewSince] = useState(0);
   const [sesMenu, setSesMenu] = useState(false);
   const link = useAgentLink();
+  // When Team is on, the Architect reads the project once, so every agent starts from the same map. It changes no code.
+  useEffect(() => {
+    if (!teamOn || !root || !analysis || mapping || agentRunning) return;
+    if (analysis.flow?.source === 'agent' || !link.claudeFound || !link.signedIn) return;
+    const key = `cv.team.read:${root}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch {
+      return;
+    }
+    void askMap();
+  }, [teamOn, root, analysis, mapping, agentRunning, link.claudeFound, link.signedIn, askMap]);
   const sessions = useMemo(() => sessionsOf(events, root), [events, root]);
   // After "New session", follow the first session that starts afterwards.
   useEffect(() => {
@@ -151,6 +179,17 @@ export function ChatWidget(): JSX.Element {
     if (!prompt || !root) return;
     if (!localStorage.getItem('cv.app.agentOk')) {
       setConfirm(true);
+      return;
+    }
+    if (teamOn) {
+      try {
+        await api('/api/team/start', { path: root, request: prompt });
+        setText('');
+        requestAnimationFrame(grow);
+      } catch (err) {
+        const p = (err as { problem?: { what: string; why: string[]; next: string } }).problem;
+        setNote({ kind: 'err', title: p?.what ?? 'Could not start the team', broke: p?.why.join('. '), next: p?.next ?? (err instanceof Error ? err.message : undefined) });
+      }
       return;
     }
     // A new session starts a fresh conversation; a picked older one is continued; otherwise the current one goes on.
@@ -205,7 +244,7 @@ export function ChatWidget(): JSX.Element {
       <div className="msgs" ref={scroller}>
         {!root && <p className="mut">Open a project to start.</p>}
         {root && lines.length === 0 && agentLines.length === 0 && (
-          <p className="mut">{engine === 'claude' ? 'Tell Claude Code what to build. It runs on this computer with your own sign-in, remembers this conversation, and everything it does shows up here and in the town.' : `Tell ${engineLabel} what to build. It runs on this computer with your own sign-in, and what it prints shows up here.`}</p>
+          <p className="mut">{teamOn ? 'Describe a feature or a fix. The Lead picks the specialists it needs and shows you its pick before anyone starts.' : engine === 'claude' ? 'Tell Claude Code what to build. It runs on this computer with your own sign-in, remembers this conversation, and everything it does shows up here and in the town.' : `Tell ${engineLabel} what to build. It runs on this computer with your own sign-in, and what it prints shows up here.`}</p>
         )}
         {root && engine === 'claude' && !link.claudeFound && (
           <div className="cc err"><b>Claude Code is not installed</b><div><i>Next</i>Install Claude Code, check that `claude` runs in a terminal, then restart Codeville.</div></div>
@@ -246,16 +285,17 @@ export function ChatWidget(): JSX.Element {
           </div>
         )}
         {agentRunning && agentLines.length === 0 && <div className="tool dim"><span className="aispin" aria-hidden="true" /> Claude Code is starting…</div>}
+        {myTeamRun && <TeamRunCard run={myTeamRun} />}
       </div>
 
       <div className="composer">
         {note && <NoteCard note={note} onClose={() => setNote(null)} />}
         {confirm && (
           <div className="cc info">
-            <b>Run {engineLabel} in this folder?</b>
+            <b>Run {teamOn ? 'the team' : engineLabel} in this folder?</b>
             <div>
               <i>Note</i>
-              It can read and edit files in {root}. Your {engineLabel} settings and sign-in apply.
+              {teamOn ? `The team runs Claude Code and can edit files in ${root}. Codeville limits what each agent may change.` : `It can read and edit files in ${root}. Your ${engineLabel} settings and sign-in apply.`}
             </div>
             <div className="mbtn">
               <button
@@ -277,7 +317,7 @@ export function ChatWidget(): JSX.Element {
             rows={2}
             value={text}
             aria-label="Prompt"
-            placeholder={root ? 'Describe what to build or fix' : 'Open a project first'}
+            placeholder={!root ? 'Open a project first' : teamOn ? 'Describe a feature or a fix for the team' : 'Describe what to build or fix'}
             disabled={!root}
             onChange={(e) => {
               setText(e.target.value);
@@ -291,7 +331,8 @@ export function ChatWidget(): JSX.Element {
             }}
           />
           <div className="pbar">
-            <div className="menuwrap">
+            <TeamToggle on={teamOn} onChange={setTeam} />
+            {!teamOn && <div className="menuwrap">
               <button className="ch" aria-haspopup="menu" onClick={() => setEngMenu((v) => !v)} title="AI engine">
                 {engineLabel}
               </button>
@@ -309,8 +350,8 @@ export function ChatWidget(): JSX.Element {
                   </button>
                 </div>
               )}
-            </div>
-            {engine === 'claude' && <div className="menuwrap">
+            </div>}
+            {!teamOn && engine === 'claude' && <div className="menuwrap">
               <button className="ch" aria-haspopup="menu" onClick={() => setMenu((v) => !v)} title="Model">
                 {MODELS.find((m) => m.value === model)?.label ?? 'Default'}
               </button>
@@ -342,7 +383,7 @@ export function ChatWidget(): JSX.Element {
                 <Ico name="stop" />
               </button>
             ) : (
-              <button className="send" onClick={() => void go()} disabled={!root || !text.trim()} title="Send (Enter)" aria-label="Send">
+              <button className="send" onClick={() => void go()} disabled={!root || !text.trim() || (teamOn && teamBusy)} title={teamOn && teamBusy ? 'The team is working. Wait for it, or press Stop on the run.' : 'Send (Enter)'} aria-label="Send">
                 <Ico name="send" />
               </button>
             )}

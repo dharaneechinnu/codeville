@@ -4,6 +4,8 @@
  * One event is one small JSON object with a `type`.
  */
 
+import type { TeamRun } from './types.js';
+
 export type EventSource = 'agent' | 'terminal' | 'git' | 'app';
 
 /** What broke, why, and what to do next. Every failure carries one, so messages stay crisp. */
@@ -22,6 +24,8 @@ interface Base {
   ts: number;
   source: EventSource;
   sessionId?: string;
+  /** The team agent that caused this, when the team is working. */
+  team?: string;
 }
 
 export type CvEvent = Base &
@@ -53,6 +57,7 @@ export type CvEvent = Base &
     | { type: 'git.commit'; branch: string; hash: string; message: string; files: number }
     | { type: 'git.push'; branch: string; commits: number }
     | { type: 'analysis.step'; step: string; label: string; status: 'running' | 'done'; detail?: string }
+    | { type: 'team.run'; run: TeamRun }
   );
 
 export type CvEventType = CvEvent['type'];

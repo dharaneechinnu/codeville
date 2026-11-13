@@ -123,3 +123,38 @@ export interface Analysis {
   truncated: boolean;
   steps: AnalysisStep[];
 }
+
+/** One agent's turn in a team run. */
+export interface TeamStage {
+  role: string;
+  label: string;
+  color: string;
+  why: string;
+  status: 'waiting' | 'working' | 'done' | 'failed' | 'stopped';
+  note: string;
+  file: string;
+  changed: string[];
+  putBack: string[];
+  result: { status?: 'done' | 'fail'; needs?: string[]; severity?: 'none' | 'low' | 'medium' | 'high'; didNotRun?: string[] };
+  outputId: string;
+  added: string;
+}
+
+/** A request worked on by the team: the Lead's pick, each agent's turn, and the result. */
+export interface TeamRun {
+  id: string;
+  root: string;
+  request: string;
+  state: 'picking' | 'pick' | 'running' | 'design' | 'security' | 'done' | 'stopped' | 'failed';
+  pick: { role: string; why: string; locked: boolean }[];
+  tasks: string[];
+  plan: string;
+  stages: TeamStage[];
+  lead: TeamStage | null;
+  changed: string[];
+  summary: string;
+  problem: { what: string; why: string[]; next: string } | null;
+  commit: { hash?: string; branch?: string; files?: number; message?: string; error?: string; next?: string } | null;
+  notes: string;
+  started: number;
+}

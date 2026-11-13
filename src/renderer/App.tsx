@@ -5,6 +5,7 @@ import { useAgentLink } from './agentlink.js';
 import { Ico } from './icons.js';
 import { ConnectAgent, CustomizePanel, EditorPopup, ExtensionsPopup, NewProjectPopup, TerminalPopup } from './popups.js';
 import { EnginesPage, openEngines } from './engines.js';
+import { TeamPage, teamModels } from './team.js';
 import { CvProvider, useCv } from './state.js';
 import { AnalysisProgress, VizWidget } from './viz.js';
 import { ChatWidget, FilesWidget, GitWidget } from './widgets.js';
@@ -36,10 +37,22 @@ function Shell(): JSX.Element {
   const [newp, setNewp] = useState(false);
   // The AI engines page covers the whole window, on top of the project or the welcome screen.
   const [engines, setEngines] = useState(false);
+  const [team, setTeam] = useState(false);
   useEffect(() => {
-    const open = (): void => setEngines(true);
+    const open = (): void => {
+      setTeam(false);
+      setEngines(true);
+    };
+    const openT = (): void => {
+      setEngines(false);
+      setTeam(true);
+    };
     window.addEventListener('cv:open-engines', open);
-    return () => window.removeEventListener('cv:open-engines', open);
+    window.addEventListener('cv:open-team', openT);
+    return () => {
+      window.removeEventListener('cv:open-engines', open);
+      window.removeEventListener('cv:open-team', openT);
+    };
   }, []);
 
   const setLayout = useCallback((fn: (l: Layout) => Layout) => {
@@ -61,6 +74,7 @@ function Shell(): JSX.Element {
         setCustom(false);
         setAdjust(false);
         setEngines(false);
+        setTeam(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -70,7 +84,13 @@ function Shell(): JSX.Element {
   // Hooks must run on every render, so this one stays above the early return below.
   const link = useAgentLink();
 
-  const enginesPage = engines ? <EnginesPage onBack={() => setEngines(false)} /> : null;
+  const enginesPage = (
+    <>
+      {teamModels}
+      {engines ? <EnginesPage onBack={() => setEngines(false)} /> : null}
+      {team ? <TeamPage onBack={() => setTeam(false)} /> : null}
+    </>
+  );
   if (!cv.analysis) return <>{<Welcome />}{enginesPage}</>;
 
   const render = (id: WId): JSX.Element => (id === 'chat' ? <ChatWidget /> : id === 'viz' ? <VizWidget /> : id === 'files' ? <FilesWidget /> : <GitWidget />);
@@ -115,7 +135,10 @@ function Shell(): JSX.Element {
         <button className="btn ib" aria-pressed={cv.editorOpen} onClick={() => cv.setEditorOpen(!cv.editorOpen)} title="Editor" aria-label="Editor">
           <Ico name="editor" />
         </button>
-        <button className="btn ib" aria-pressed={engines} onClick={() => setEngines(!engines)} title="AI engines" aria-label="AI engines">
+        <button className="btn ib" aria-pressed={team} onClick={() => { setEngines(false); setTeam(!team); }} title="Team" aria-label="Team">
+          <Ico name="team" />
+        </button>
+        <button className="btn ib" aria-pressed={engines} onClick={() => { setTeam(false); setEngines(!engines); }} title="AI engines" aria-label="AI engines">
           <Ico name="engine" />
         </button>
         <button className="btn ib" aria-pressed={ext} onClick={() => setExt(!ext)} title="Extensions" aria-label="Extensions">

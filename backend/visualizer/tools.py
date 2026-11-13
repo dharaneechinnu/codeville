@@ -189,17 +189,36 @@ def current_problems(args: dict, hub: EventHub) -> dict:
     return {"ok": not problems, "problems": problems}
 
 
+def project_command(kind: str, root: str, asked: str = "") -> tuple:
+    """The command to run and the folder to run it in. Only the project's own commands, as Codeville found them, can
+    run: a caller may pick one of them by its text or id, but never supply a command line of its own."""
+    if asked and classify_command(asked) != kind:
+        raise ToolError(f"That is not a {kind} command. Use the project's own {kind} command, or leave `command` empty.")
+    found = [c for c in find_commands(Path(root)) if c["kind"] == kind]
+    if not found:
+        default = _default_command(kind, root)
+        found = [{"id": f"{kind}:.:default", "command": default, "cwd": ""}] if default else []
+    if not found:
+        raise ToolError(f"This project has no {kind} command that Codeville can find. Add one to package.json or the project's settings.")
+    if asked:
+        pick = next((c for c in found if asked in (c["command"], c["id"])), None)
+        if pick is None:
+            names = ", ".join(f"`{c['command']}`" for c in found)
+            raise ToolError(f"Only the project's own {kind} commands can run here: {names}. Pass one of them, or leave `command` empty.")
+    else:
+        pick = found[0]
+    return pick["command"], str((Path(root) / pick["cwd"]).resolve()) if pick["cwd"] else root
+
+
 def run_check(args: dict, hub: EventHub) -> dict:
     kind = args.get("kind")
     if kind not in CHECK_KINDS:
         raise ToolError(f"`kind` must be one of {', '.join(CHECK_KINDS)}.")
     root = _project_root(args)
     state.set_root(root)
-    command = (args.get("command") or "").strip() or _default_command(kind, root)
-    if classify_command(command) != kind:
-        raise ToolError(f"That is not a {kind} command. Use the project's own {kind} command, or leave `command` empty.")
+    command, cwd = project_command(kind, root, (args.get("command") or "").strip())
     timeout = max(5, min(600, int(args.get("timeout") or 180)))
-    handle = run_command(command, root, hub, timeout=timeout, source="terminal")
+    handle = run_command(command, cwd, hub, timeout=timeout, source="terminal", root=root)
     if not handle.wait(timeout + 15):
         handle.kill()
         raise ToolError(f"The {kind} run took longer than {timeout} seconds and was stopped. Try a smaller scope.")

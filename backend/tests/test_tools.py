@@ -84,3 +84,9 @@ def test_unknown_tools_and_missing_projects_say_what_to_do(auth):
     assert r.status_code == 400 and "Available:" in r.json()["error"]
     r = call(auth, "git_status", {"path": "C:/definitely/not/here"})
     assert r.status_code == 400 and "does not exist" in r.json()["error"]
+
+
+def test_run_check_only_runs_the_projects_own_commands(auth, shop):
+    r = call(auth, "run_check", {"kind": "test", "path": str(shop), "command": "pytest; rm -rf ~"})
+    assert r.status_code == 400 and "Only the project's own test commands can run here: `npm test`" in r.json()["error"]
+    assert call(auth, "run_check", {"kind": "test", "path": str(shop), "command": "npm test"}).json()["command"] == "npm test"
