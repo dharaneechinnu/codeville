@@ -4,6 +4,7 @@ import { Workspace, loadLayout, saveLayout, PRESETS, type Layout, type WId } fro
 import { useAgentLink } from './agentlink.js';
 import { Ico } from './icons.js';
 import { ConnectAgent, CustomizePanel, EditorPopup, ExtensionsPopup, NewProjectPopup, TerminalPopup } from './popups.js';
+import { EnginesPage, openEngines } from './engines.js';
 import { CvProvider, useCv } from './state.js';
 import { AnalysisProgress, VizWidget } from './viz.js';
 import { ChatWidget, FilesWidget, GitWidget } from './widgets.js';
@@ -33,6 +34,13 @@ function Shell(): JSX.Element {
     return () => window.removeEventListener('cv:open-ai-setup', open);
   }, []);
   const [newp, setNewp] = useState(false);
+  // The AI engines page covers the whole window, on top of the project or the welcome screen.
+  const [engines, setEngines] = useState(false);
+  useEffect(() => {
+    const open = (): void => setEngines(true);
+    window.addEventListener('cv:open-engines', open);
+    return () => window.removeEventListener('cv:open-engines', open);
+  }, []);
 
   const setLayout = useCallback((fn: (l: Layout) => Layout) => {
     setLayoutState((l) => {
@@ -52,6 +60,7 @@ function Shell(): JSX.Element {
         setMenu(false);
         setCustom(false);
         setAdjust(false);
+        setEngines(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -61,7 +70,8 @@ function Shell(): JSX.Element {
   // Hooks must run on every render, so this one stays above the early return below.
   const link = useAgentLink();
 
-  if (!cv.analysis) return <Welcome />;
+  const enginesPage = engines ? <EnginesPage onBack={() => setEngines(false)} /> : null;
+  if (!cv.analysis) return <>{<Welcome />}{enginesPage}</>;
 
   const render = (id: WId): JSX.Element => (id === 'chat' ? <ChatWidget /> : id === 'viz' ? <VizWidget /> : id === 'files' ? <FilesWidget /> : <GitWidget />);
 
@@ -105,6 +115,9 @@ function Shell(): JSX.Element {
         <button className="btn ib" aria-pressed={cv.editorOpen} onClick={() => cv.setEditorOpen(!cv.editorOpen)} title="Editor" aria-label="Editor">
           <Ico name="editor" />
         </button>
+        <button className="btn ib" aria-pressed={engines} onClick={() => setEngines(!engines)} title="AI engines" aria-label="AI engines">
+          <Ico name="engine" />
+        </button>
         <button className="btn ib" aria-pressed={ext} onClick={() => setExt(!ext)} title="Extensions" aria-label="Extensions">
           <Ico name="extensions" />
         </button>
@@ -117,6 +130,7 @@ function Shell(): JSX.Element {
         {custom && <CustomizePanel layout={layout} setLayout={setLayout} onClose={() => setCustom(false)} />}
       </header>
 
+      {enginesPage}
       {cv.error && (
         <div className="notice bad" role="alert">
           <b>Broke</b> {cv.error}
@@ -226,6 +240,7 @@ function Welcome(): JSX.Element {
           </h2>
           <p className="mut">One click adds the Codeville plugin to Claude Code. You can also do this later from Extensions.</p>
           <ConnectAgent />
+          <p className="mut small">Using Copilot, Codex, Gemini or another agent? <button className="lnk" onClick={openEngines}>Set up AI engines</button></p>
         </section>
 
         <section>

@@ -383,6 +383,9 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .aiprovh { width: 100%; display: flex; align-items: center; gap: 6px; background: transparent; border: none; color: var(--text); padding: 7px 9px; text-align: left; }
 .aiprovh b { flex: 1; font: 600 13px var(--sans); }
 .aiprovh:hover { background: #10152c; }
+.aiprovh.static { cursor: default; flex-wrap: wrap; } .aiprovh.static b { white-space: nowrap; } .aiprovh.static:hover { background: transparent; }
+.aiprovb .cmd { width: 100%; }
+.chip.t-account { color: #9ad0ff; border-color: #1f4a6a; }
 .chip.t-free, .chip.t-local { color: #8dffa8; border-color: #1f5a30; } .chip.t-paid { color: #ffd98a; border-color: #6a5a1f; }
 .aiprovb { display: flex; flex-direction: column; gap: 8px; padding: 4px 9px 10px; }
 .aiprovb label { display: flex; flex-direction: column; gap: 3px; font: 11px var(--mono); color: var(--muted); }
@@ -392,3 +395,16 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .aiprovacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .okmsg { color: var(--ok); } .badmsg { color: #ff8a98; }
 @media (prefers-reduced-motion: reduce) { .aispin { animation: none; } }
+
+/* The AI engines page: covers the window, above the popups. */
+.page { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column; }
+.pagehead { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 2px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.pagehead h1 { margin: 0; font: 700 15px var(--mono); letter-spacing: .04em; }
+.pagehead .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pagebody { flex: 1; overflow: auto; padding: 18px max(16px, calc((100vw - 1180px) / 2)) 40px; }
+.pagebody h2 { font: 700 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 8px; }
+.pagelead { max-width: 760px; margin: 0; color: var(--muted); line-height: 1.5; }
+.pagelead b { color: var(--text); }
+.enggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; align-items: start; }
+.engby { font: 11px var(--mono); color: var(--muted); font-style: normal; margin-left: 6px; }
+.pagenotes { margin: 0; padding-left: 18px; color: var(--muted); max-width: 760px; line-height: 1.6; font-size: 13px; }

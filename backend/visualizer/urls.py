@@ -15,6 +15,8 @@ urlpatterns = [
     path("api/ai/settings", views.AISettingsView.as_view()),
     path("api/ai/test", views.AITestView.as_view()),
     path("api/ai/edit", views.AIEditView.as_view()),
+    path("api/engines", views.EnginesView.as_view()),
+    path("api/engines/login", views.EngineLoginView.as_view()),
     path("api/git/changes", views.GitChangesView.as_view()),
     path("api/git/stage", views.GitStageView.as_view()),
     path("api/git/commit", views.GitCommitView.as_view()),

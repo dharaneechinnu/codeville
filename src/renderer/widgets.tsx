@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CvEvent } from '../shared/events.js';
 import { useCv, type Note } from './state.js';
 import { Ico } from './icons.js';
+import { openEngines, useEngines } from './engines.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -94,6 +95,16 @@ export function ChatWidget(): JSX.Element {
   const [text, setText] = useState('');
   const [model, setModel] = useState('');
   const [menu, setMenu] = useState(false);
+  // Which AI engine the Chat sends to. Claude Code has named models; the others use their own default.
+  const { engines } = useEngines();
+  const [engine, setEngine] = useState(() => localStorage.getItem('cv.chat.engine') ?? 'claude');
+  const [engMenu, setEngMenu] = useState(false);
+  const engineLabel = engines?.find((e) => e.id === engine)?.label ?? (engine === 'claude' ? 'Claude Code' : engine);
+  const pickEngine = (id: string): void => {
+    setEngine(id);
+    setEngMenu(false);
+    localStorage.setItem('cv.chat.engine', id);
+  };
   const [confirm, setConfirm] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -130,7 +141,7 @@ export function ChatWidget(): JSX.Element {
       setConfirm(true);
       return;
     }
-    if (await sendPrompt(prompt, model)) {
+    if (await sendPrompt(prompt, engine === 'claude' ? model : '', engine)) {
       setText('');
       requestAnimationFrame(grow);
     }
@@ -210,7 +221,7 @@ export function ChatWidget(): JSX.Element {
         )}
         {agentLines.length > 0 && (
           <div className="m">
-            <span className="who">Claude Code{agentRunning ? ' · working' : ''}</span>
+            <span className="who">{engineLabel}{agentRunning ? ' · working' : ''}</span>
             {agentLines.slice(-40).join('\n')}
           </div>
         )}
@@ -220,10 +231,10 @@ export function ChatWidget(): JSX.Element {
         {note && <NoteCard note={note} onClose={() => setNote(null)} />}
         {confirm && (
           <div className="cc info">
-            <b>Run Claude Code in this folder?</b>
+            <b>Run {engineLabel} in this folder?</b>
             <div>
               <i>Note</i>
-              It can read and edit files in {root}. Your Claude Code settings and hooks apply.
+              It can read and edit files in {root}. Your {engineLabel} settings and sign-in apply.
             </div>
             <div className="mbtn">
               <button
@@ -260,6 +271,25 @@ export function ChatWidget(): JSX.Element {
           />
           <div className="pbar">
             <div className="menuwrap">
+              <button className="ch" aria-haspopup="menu" onClick={() => setEngMenu((v) => !v)} title="AI engine">
+                {engineLabel}
+              </button>
+              {engMenu && (
+                <div className="menu" role="menu">
+                  <div className="mh">AI engine</div>
+                  {(engines ?? []).map((e) => (
+                    <button key={e.id} role="menuitem" disabled={!e.found} title={e.found ? undefined : 'Not installed. Set it up in Extensions.'} onClick={() => pickEngine(e.id)}>
+                      <span>{e.label}{e.found ? '' : ' (not installed)'}</span>
+                      {e.id === engine && <i>on</i>}
+                    </button>
+                  ))}
+                  <button role="menuitem" onClick={() => { setEngMenu(false); openEngines(); }}>
+                    <span>Set up engines…</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            {engine === 'claude' && <div className="menuwrap">
               <button className="ch" aria-haspopup="menu" onClick={() => setMenu((v) => !v)} title="Model">
                 {MODELS.find((m) => m.value === model)?.label ?? 'Default'}
               </button>
@@ -281,7 +311,7 @@ export function ChatWidget(): JSX.Element {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
             <span className="ch static" title="Current git branch">
               {git?.branch ?? 'no branch'}
             </span>

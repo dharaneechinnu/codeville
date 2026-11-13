@@ -60,7 +60,7 @@ interface Ctx {
   refreshGit: () => Promise<void>;
   gitAct: (path: string, body: Record<string, unknown>) => Promise<boolean>;
   run: (command: string, cwd?: string) => Promise<void>;
-  sendPrompt: (prompt: string, model: string) => Promise<boolean>;
+  sendPrompt: (prompt: string, model: string, engine?: string) => Promise<boolean>;
   agentLines: string[];
   agentRunning: boolean;
   stopAgent: () => Promise<void>;
@@ -213,10 +213,10 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   );
 
   const sendPrompt = useCallback(
-    async (prompt: string, model: string): Promise<boolean> => {
+    async (prompt: string, model: string, engine = 'claude'): Promise<boolean> => {
       if (!root) return false;
       try {
-        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model });
+        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, engine });
         setAgentRun(r.runId);
         return true;
       } catch (err) {

@@ -5,6 +5,7 @@ import { useAgentLink } from './agentlink.js';
 import { Ico } from './icons.js';
 import { useCv } from './state.js';
 import { AIBar, AIModels, AIReview } from './aiedit.js';
+import { EnginesSummary } from './engines.js';
 import type { AIEdit } from './ai.js';
 
 interface PopupProps {
@@ -452,6 +453,14 @@ export function ExtensionsPopup({ onClose }: { onClose: () => void }): JSX.Eleme
             <span className={`chip ${git ? 'ok' : ''}`}>{git ? `On ${git.branch}` : root ? 'No git repository' : 'No project'}</span>
           </div>
           <p className="mut small">Stage, commit and push from Source control. Pushing uses the git login already on this computer, so nothing is stored here.</p>
+        </section>
+
+        <section className="extcard" id="ext-engines">
+          <div className="exth">
+            <b>AI engines</b>
+            <span className="chip">Your own account</span>
+          </div>
+          <EnginesSummary />
         </section>
 
         <section className="extcard" id="ext-ai">
