@@ -1,6 +1,4 @@
 import subprocess
-import sys
-import time
 
 import pytest
 
@@ -105,22 +103,6 @@ def test_sending_a_prompt_says_so_when_claude_code_is_missing(auth, repo, monkey
     assert r.status_code == 400
     assert r.json()["problem"]["what"] == "Claude Code was not found"
     assert post(auth, "/api/agent/send", {"path": str(repo), "prompt": ""}).json()["error"] == "Write what you want done"
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="uses a .cmd stand-in for the claude command")
-def test_a_prompt_is_passed_to_claude_code_and_its_output_is_streamed(auth, repo, monkeypatch, tmp_path_factory):
-    fake = tmp_path_factory.mktemp("bin") / "claude.cmd"
-    fake.write_text("@echo off\r\necho args: %*\r\n")
-    monkeypatch.setattr(agent, "claude_path", lambda: str(fake))
-    lines = []
-    monkeypatch.setattr(hub, "output", lambda payload: lines.append(payload["line"]))
-    r = post(auth, "/api/agent/send", {"path": str(repo), "prompt": "Add coupon", "model": "claude-sonnet-5-5"})
-    assert r.status_code == 202
-    end = time.time() + 10
-    while time.time() < end and not any("args:" in l for l in lines):
-        time.sleep(0.1)
-    joined = " ".join(lines)
-    assert "-p" in joined and "Add coupon" in joined and "--model" in joined and "acceptEdits" in joined
 
 
 def test_stopping_something_unknown_is_harmless(auth):

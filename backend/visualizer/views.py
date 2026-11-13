@@ -17,9 +17,9 @@ from .git import NotARepo, git_status
 from .hub import hub
 from .models import Project
 from .runner import run_command, stop_run
-from . import agent, ai, connector, doctor, gitops, projects
+from . import agent, ai, connector, doctor, engines, gitops, projects
 from .serializers import (
-    AgentSerializer, AIEditSerializer, AISettingsSerializer, CloneSerializer, CommitSerializer, FileSerializer, FileWriteSerializer, NewProjectSerializer,
+    AgentSerializer, AIEditSerializer, AISettingsSerializer, CloneSerializer, CommitSerializer, EngineSerializer, FileSerializer, FileWriteSerializer, NewProjectSerializer,
     FolderSerializer, PushSerializer, RunSerializer, StageSerializer,
 )
 from .analyzer import analyze_project
@@ -249,6 +249,8 @@ class AITestView(APIView):
             return Response(ai.test(request.data.get("provider") or None))
         except ai.AIProblem as err:
             return _ai_error(err)
+        finally:
+            engines.forget()  # a test is the real answer to "is it signed in", so the next status is asked afresh
 
 
 class AIEditView(APIView):
@@ -270,6 +272,25 @@ class AIEditView(APIView):
             return Response(ai.edit(d.get("provider") or None, target.relative_to(root).as_posix(), text, d["instruction"]))
         except ai.AIProblem as err:
             return _ai_error(err)
+
+
+class EnginesView(APIView):
+    """The command-line AI engines on this computer: installed or not, and the account each is signed in to."""
+
+    def get(self, request):
+        return Response({"engines": engines.status(refresh=request.query_params.get("refresh") == "1")})
+
+
+class EngineLoginView(APIView):
+    """Opens the engine's own sign-in in a terminal. Codeville never sees the account's password or token."""
+
+    def post(self, request):
+        s = EngineSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        try:
+            return Response(engines.login(s.validated_data["engine"]))
+        except engines.EngineProblem as err:
+            return Response({"error": err.problem["what"], "problem": err.problem}, status=err.status)
 
 
 class GitChangesView(APIView):
@@ -325,7 +346,7 @@ class AgentSendView(APIView):
         state.set_root(d["path"])
         try:
             run_id = agent.send_prompt(
-                d["prompt"], d["path"], hub, model=d["model"] or None, accept_edits=d["acceptEdits"],
+                d["prompt"], d["path"], hub, model=d["model"] or None, accept_edits=d["acceptEdits"], engine=d["engine"] or "claude",
                 on_output=lambda line, stream, rid: hub.output({"runId": rid, "line": line, "stream": stream}),
             )
         except agent.AgentProblem as err:

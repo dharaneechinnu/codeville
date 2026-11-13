@@ -30,6 +30,8 @@ function trimResponse(payload) {
 }
 
 async function main() {
+  // Codeville sets this when it asks Claude Code a one-off question (an AI edit, a test). That is not a coding session.
+  if (process.env.CODEVILLE_QUIET) return;
   const raw = readStdin();
   if (!raw) return;
   let payload;

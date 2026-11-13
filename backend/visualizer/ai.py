@@ -1,6 +1,6 @@
-"""AI edits with your own key: one file, one instruction, the whole updated file back.
+"""AI edits with your own account or key: one file, one instruction, the whole updated file back.
 
-Providers are either Anthropic (through its official SDK) or any service that speaks the OpenAI-compatible
+Providers are a command-line tool signed in on this computer (Claude Code, GitHub Copilot CLI: see engines.py), Anthropic (through its official SDK) or any service that speaks the OpenAI-compatible
 chat API (DeepSeek, Groq, Gemini, OpenRouter, Ollama, OpenAI, or a custom URL). Keys are kept in ai.json in the
 config folder on this computer, readable only by this user, and are never sent back to the window.
 """
@@ -16,11 +16,15 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from . import engines
 from .config import config_dir
 from .events import problem
 
-# tier: "free" (free tier or free models), "local" (runs on this computer), "paid" (billed per use).
+# tier: "account" (a command-line tool signed in with your own account), "free" (free tier or free models),
+# "local" (runs on this computer), "paid" (billed per use).
 PROVIDERS: dict = {
+    **{f"{eid}-cli": {"label": e["label"], "tier": "account", "api": "cli", "engine": eid, "base": "", "models": e["models"],
+                      "keyUrl": e["url"], "noKey": True} for eid, e in engines.ENGINES.items()},
     "groq": {"label": "Groq", "tier": "free", "api": "openai", "base": "https://api.groq.com/openai/v1",
              "models": ["llama-3.3-70b-versatile", "openai/gpt-oss-120b", "qwen/qwen3-32b"], "keyUrl": "https://console.groq.com/keys"},
     "gemini": {"label": "Google Gemini", "tier": "free", "api": "openai", "base": "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -97,13 +101,14 @@ def public_settings() -> dict:
     for pid, p in PROVIDERS.items():
         mine = s["providers"].get(pid, {})
         key = mine.get("key") or ""
-        ready = bool(key) or p.get("noKey") or (p.get("optionalKey") and bool(mine.get("baseUrl")))
+        cli = p["api"] == "cli"
+        ready = bool(engines.find(p["engine"])) if cli else bool(key) or p.get("noKey") or (p.get("optionalKey") and bool(mine.get("baseUrl")))
         out.append({
             "id": pid, "label": p["label"], "tier": p["tier"], "keyUrl": p["keyUrl"], "models": p["models"],
             "needsKey": not p.get("noKey") and not p.get("optionalKey"),
             "model": mine.get("model") or (p["models"][0] if p["models"] else ""),
             "baseUrl": mine.get("baseUrl") or p["base"], "editableUrl": pid in ("ollama", "custom"),
-            "hasKey": bool(key), "keyHint": _hint(key) if key else "", "ready": bool(ready),
+            "hasKey": bool(key), "keyHint": _hint(key) if key else "", "ready": bool(ready), "cli": cli,
         })
     return {"active": s.get("active"), "providers": out}
 
@@ -137,7 +142,7 @@ def _resolve(provider: Optional[str]) -> tuple:
     pid = provider or s.get("active")
     if not pid:
         raise AIProblem(problem("No AI model is set up yet", ["Codeville needs a model to edit files"],
-                                "Open Extensions, AI models, pick a provider, paste its key and choose Use this one."))
+                                "Open Extensions, then use a signed-in AI engine, or pick a provider under AI models and paste its key."))
     if pid not in PROVIDERS:
         raise AIProblem(problem("That provider is not supported", [f"Got {pid!r}"], "Pick one from the list in Extensions."))
     p, mine = PROVIDERS[pid], s["providers"].get(pid, {})
@@ -149,7 +154,7 @@ def _resolve(provider: Optional[str]) -> tuple:
     base = mine.get("baseUrl") or p["base"]
     if not model:
         raise AIProblem(problem("No model is chosen", [f"{p['label']} needs a model name"], "Type the model name in Extensions, AI models."))
-    if not base:
+    if not base and p["api"] != "cli":
         raise AIProblem(problem("No address is set", ["A custom provider needs its API address"], "Add the address in Extensions, AI models."))
     return pid, p, key, model, base
 
@@ -244,6 +249,11 @@ def _http_problem(code: int, label: str, model: str, detail: str) -> dict:
 
 def chat(provider: Optional[str], system: str, user: str) -> tuple:
     pid, p, key, model, base = _resolve(provider)
+    if p["api"] == "cli":
+        try:
+            return engines.ask(p["engine"], f"{system}\n\n{user}", model), pid, model
+        except engines.EngineProblem as err:
+            raise AIProblem(err.problem, err.status) from None
     if p["api"] == "anthropic":
         return _anthropic_chat(key, model, system, user), pid, model
     return _openai_chat(base, key, model, system, user, p["label"]), pid, model

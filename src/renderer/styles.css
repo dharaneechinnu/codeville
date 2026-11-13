@@ -383,6 +383,9 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .aiprovh { width: 100%; display: flex; align-items: center; gap: 6px; background: transparent; border: none; color: var(--text); padding: 7px 9px; text-align: left; }
 .aiprovh b { flex: 1; font: 600 13px var(--sans); }
 .aiprovh:hover { background: #10152c; }
+.aiprovh.static { cursor: default; } .aiprovh.static:hover { background: transparent; }
+.aiprovb .cmd { width: 100%; }
+.chip.t-account { color: #9ad0ff; border-color: #1f4a6a; }
 .chip.t-free, .chip.t-local { color: #8dffa8; border-color: #1f5a30; } .chip.t-paid { color: #ffd98a; border-color: #6a5a1f; }
 .aiprovb { display: flex; flex-direction: column; gap: 8px; padding: 4px 9px 10px; }
 .aiprovb label { display: flex; flex-direction: column; gap: 3px; font: 11px var(--mono); color: var(--muted); }

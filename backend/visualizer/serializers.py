@@ -81,6 +81,11 @@ class AgentSerializer(FolderSerializer):
     prompt = serializers.CharField(error_messages={"required": "Write what you want done", "blank": "Write what you want done"})
     model = serializers.CharField(required=False, allow_blank=True, default="")
     acceptEdits = serializers.BooleanField(default=True)
+    engine = serializers.CharField(required=False, allow_blank=True, default="", max_length=40)
+
+
+class EngineSerializer(serializers.Serializer):
+    engine = serializers.CharField(max_length=40, error_messages={"required": "Pick an AI engine", "blank": "Pick an AI engine"})
 
 
 class NewProjectSerializer(serializers.Serializer):

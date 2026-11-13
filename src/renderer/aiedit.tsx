@@ -190,9 +190,9 @@ export function AIModels(): JSX.Element {
     <div className="aimodels">
       <p className="mut small">
         Bring your own key. Pick a provider for the editor's AI prompt; keys stay on this computer and are never shown again.
-        {active ? <> In use: <b>{active.label} · {active.model}</b>.</> : ' No model is in use yet.'}
+        {active ? <> In use: <b>{active.label} · {active.model}</b>.</> : ' Nothing is in use yet.'}
       </p>
-      {settings.providers.map((p) => (
+      {settings.providers.filter((p) => !p.cli).map((p) => (
         <ProviderRow key={p.id} p={p} active={p.id === settings.active} open={open === p.id} onToggle={() => setOpen(open === p.id ? null : p.id)} save={save} />
       ))}
     </div>

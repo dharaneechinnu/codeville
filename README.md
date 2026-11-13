@@ -139,12 +139,38 @@ Any agent can call these over HTTP with the token in the `x-cv-token` header.
 | `GET`/`POST /api/ai/settings`, `POST /api/ai/test`, `/api/ai/edit` | AI providers and keys (keys are write-only), a test call, and a proposed edit of one file. |
 | `POST /api/run`, `/api/stop` | Run or stop a command. |
 | `POST /api/git/changes`, `/stage`, `/commit`, `/push` | Source control. |
-| `POST /api/agent/send` | Send a prompt to Claude Code. |
+| `POST /api/agent/send` | Send a prompt to an AI engine (`engine`: `claude` or `copilot`). |
+| `GET /api/engines`, `POST /api/engines/login` | The AI engines on this computer, and their sign-in. |
 | `GET /api/project/templates`, `POST /api/project/new`, `/clone` | Start a project. |
 | `GET /api/doctor` | First-run checks for Git, Claude Code and Node.js. |
 
 Errors come back as `{"error": "..."}`, and for git and project actions also as a `problem`: what broke, why, the file and
 line if any, and what to do next.
+
+## AI engines (your own account)
+
+An AI engine is a command-line tool that is already signed in on this computer. Codeville starts it the way you would
+in a terminal, and it answers with your account. No key or token is typed into Codeville or stored by it.
+
+| Engine | Install | Sign in | Account |
+|---|---|---|---|
+| Claude Code | `npm install -g @anthropic-ai/claude-code` | `claude auth login` | Anthropic (Claude plan or API key) |
+| GitHub Copilot CLI | `npm install -g @github/copilot` | `copilot login` | GitHub (a Copilot plan) |
+
+Open **Extensions, AI engines**. Each engine shows whether it is installed and which account it uses. **Sign in** opens
+the tool's own sign-in in a terminal, **Test** sends one real question, and **Use for the editor** makes it the model
+behind **Edit with AI**. In the **Chat**, pick the engine next to the model.
+
+How it runs them (in `backend/visualizer/engines.py`):
+
+- The prompt goes in on standard input, never as a command-line argument, so a whole file fits and nothing you type is
+  read by `cmd.exe` on the way to an npm launcher.
+- A one-off question (an AI edit, a test) runs with tools off: `claude -p --tools ""`, and `copilot -s` with no allow
+  rule, which Copilot treats as deny in non-interactive mode.
+- In the Chat, Claude Code runs with `--permission-mode acceptEdits` and Copilot with `--allow-tool=write`: file edits
+  only. Neither is given an allow-everything flag.
+- The town lights up live for Claude Code (through the plugin's hooks). Copilot's output shows in the Chat; the town
+  catches up from the changed files.
 
 ## AI edits (your own key)
 

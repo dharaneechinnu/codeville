@@ -5,7 +5,7 @@ import { api } from './api.js';
 export interface AIProvider {
   id: string;
   label: string;
-  tier: 'free' | 'local' | 'paid' | 'any';
+  tier: 'account' | 'free' | 'local' | 'paid' | 'any';
   keyUrl: string;
   models: string[];
   needsKey: boolean;
@@ -15,6 +15,8 @@ export interface AIProvider {
   hasKey: boolean;
   keyHint: string;
   ready: boolean;
+  /** A command-line tool signed in on this computer (set up under AI engines), not a key. */
+  cli: boolean;
 }
 
 export interface AISettings {
@@ -33,7 +35,7 @@ export interface AIEdit {
   changed: boolean;
 }
 
-export const TIER: Record<AIProvider['tier'], string> = { free: 'Free tier', local: 'Free, local', paid: 'Paid', any: 'Any' };
+export const TIER: Record<AIProvider['tier'], string> = { account: 'Your account', free: 'Free tier', local: 'Free, local', paid: 'Paid', any: 'Any' };
 
 /** Opens Extensions at the AI models section (App listens for this). */
 export function openAISetup(): void {

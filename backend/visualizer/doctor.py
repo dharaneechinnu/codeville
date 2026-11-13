@@ -12,6 +12,7 @@ _FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 TOOLS = [
     ("git", "Git", "Needed for Source control, push and copying repositories.", "Install Git for Windows from git-scm.com, then restart the app.", True),
     ("claude", "Claude Code", "Needed to send prompts from the Chat.", "Install Claude Code, then restart the app.", False),
+    ("copilot", "GitHub Copilot CLI", "An optional AI engine for the Chat and the editor, signed in with your GitHub account.", "Install it with `npm install -g @github/copilot` if you want to use it.", False),
     ("node", "Node.js", "Needed to run JavaScript tests and builds.", "Install Node.js LTS from nodejs.org if your projects use it.", False),
 ]
 
