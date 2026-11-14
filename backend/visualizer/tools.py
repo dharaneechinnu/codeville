@@ -14,7 +14,7 @@ from .analysis import agentmap, steps
 from .analysis.commands import find_commands, find_tests
 from .analysis.connections import find_connections
 from .analyzer import analyze_project
-from .events import crisp
+from .events import crisp, new_id
 from .git import NotARepo, git_status
 from .hub import EventHub
 from .parsers import classify_command
@@ -216,7 +216,17 @@ def run_check(args: dict, hub: EventHub) -> dict:
         raise ToolError(f"`kind` must be one of {', '.join(CHECK_KINDS)}.")
     root = _project_root(args)
     state.set_root(root)
-    command, cwd = project_command(kind, root, (args.get("command") or "").strip())
+    try:
+        command, cwd = project_command(kind, root, (args.get("command") or "").strip())
+    except ToolError:
+        if kind == "test":
+            # A project with no test command has tests that did not run. Say it as an event, so the app and the team
+            # know the change is untested instead of taking the agent's word for it.
+            hub.push({"type": "run.end", "source": "terminal", "runId": new_id("run"), "kind": "test", "status": "fail", "passed": 0,
+                      "failed": 0, "skipped": 0, "ms": 0,
+                      "problem": {"what": "The tests did not run", "why": ["No test command was found for this project"], "file": None,
+                                  "line": None, "next": "Add a test command (for example a pytest or npm test setup), then run again."}})
+        raise
     timeout = max(5, min(600, int(args.get("timeout") or 180)))
     handle = run_command(command, cwd, hub, timeout=timeout, source="terminal", root=root)
     if not handle.wait(timeout + 15):

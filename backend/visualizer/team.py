@@ -339,6 +339,8 @@ class Run:
     summary: str = ""
     problem: Optional[dict] = None
     commit: Optional[dict] = None
+    # The tests could not be run at all (a missing package, no test command): the work is done but nobody checked it.
+    untested: bool = False
     notes: str = ""
     started: int = field(default_factory=lambda: int(time.time() * 1000))
     gate: threading.Event = field(default_factory=threading.Event, repr=False)
@@ -355,7 +357,7 @@ class Run:
             "id": self.id, "root": self.root, "request": self.request, "state": self.state, "pick": self.pick,
             "tasks": self.tasks, "plan": self.plan, "stages": [st(s) for s in self.stages], "lead": st(self.lead) if self.lead else None,
             "changed": self.changed, "summary": self.summary, "problem": self.problem, "commit": self.commit, "notes": self.notes,
-            "started": self.started,
+            "started": self.started, "untested": self.untested,
         }
 
 
@@ -696,7 +698,8 @@ class Team:
         while i < len(run.stages) and not run.stop:
             stage = run.stages[i]
             extra = ""
-            if stage.role == "developer" and i > 0 and run.stages[i - 1].role == "tester" and run.stages[i - 1].result.get("status") == "fail":
+            if (stage.role == "developer" and i > 0 and run.stages[i - 1].role == "tester" and run.stages[i - 1].result.get("status") == "fail"
+                    and not run.untested):
                 extra = "The Tester found failures. Fix the application code so the tests pass. Do not weaken the tests."
             self._work(run, stage, extra)
             if run.stop:
@@ -714,7 +717,12 @@ class Team:
                 if risky and "security" not in later:
                     at = later.index("deployment") + i + 1 if "deployment" in later else len(run.stages)
                     run.stages.insert(at, Stage("security", why="The change touches " + ", ".join(risky[:3]), added="The Lead added Security after the code was written."))
-            if stage.role == "tester" and stage.result.get("status") == "fail" and rounds < MAX_FIX_ROUNDS and any(s.role == "developer" for s in run.stages) and len(run.stages) < MAX_STAGES:
+            # Tests that could not even start are not failing code: a missing package is not the Developer's to fix, and
+            # sending the Developer back only costs time and adds files nobody asked for. The run says so instead.
+            could_not_test = stage.role == "tester" and any(str(w).startswith("test:") for w in stage.result.get("didNotRun", []))
+            if stage.role == "tester":
+                run.untested = could_not_test
+            if stage.role == "tester" and not could_not_test and stage.result.get("status") == "fail" and rounds < MAX_FIX_ROUNDS and any(s.role == "developer" for s in run.stages) and len(run.stages) < MAX_STAGES:
                 rounds += 1
                 run.stages[i + 1:i + 1] = [Stage("developer", why="Fix what the Tester found", added=f"Fix round {rounds} of {MAX_FIX_ROUNDS}"),
                                            Stage("tester", why="Check the fix", added=f"Fix round {rounds} of {MAX_FIX_ROUNDS}")]
@@ -759,7 +767,8 @@ class Team:
                 "files": len(files), "message": message}
 
     def _summary(self, run: Run) -> str:
-        lines = [f"# Team run {run.id}", "", f"**Request:** {run.request}", "", f"**Result:** {run.state}"]
+        result = "done, not tested" if run.state == "done" and run.untested else run.state
+        lines = [f"# Team run {run.id}", "", f"**Request:** {run.request}", "", f"**Result:** {result}"]
         if run.plan:
             lines += ["", f"**Plan:** {run.plan}"]
         if run.problem:
@@ -772,7 +781,7 @@ class Team:
         stuck = sorted({w for s in run.stages for w in s.result.get("didNotRun", [])})
         if stuck:
             lines += ["", "## Checks that could not run", *[f"- {w}" for w in stuck],
-                      "", "Install the project's packages, then ask the team to test again. The team cannot install packages."]
+                      "", "Install what is missing, or add a test command, then ask the team to test again. The team cannot install packages."]
         if run.changed:
             lines += ["", "## Files changed", *[f"- {p}" for p in run.changed]]
         if run.commit and run.commit.get("hash"):

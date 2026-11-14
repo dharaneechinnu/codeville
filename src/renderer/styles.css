@@ -612,3 +612,4 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .pbox { position: relative; }
 .pbar > .usage { position: static; }
 .pbar .usage .usagecard { left: 6px; right: 6px; width: auto; bottom: 44px; top: auto; }
+.chip.warn { color: var(--warn); border-color: #6a5a1f; }

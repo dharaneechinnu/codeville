@@ -260,7 +260,9 @@ Tester, Security reviewer and Deployment. A typo fix uses the Developer alone; a
    Team page turns this off).
 3. The picked agents work one after another. Each one's last reply is a handoff note for the next, saved in
    `.codeville/team/<run>/` inside the project (kept out of git).
-4. If the Tester's tests fail, the Developer is sent back, at most twice. A high security finding waits for you.
+4. If the Tester's tests fail, the Developer is sent back, at most twice. When the tests cannot run at all (a missing
+   package, for example), nobody is sent back: the run ends as **Done, not tested** and says what to install. A high
+   security finding waits for you.
 5. When Deployment was called, Codeville commits the files the team changed. You push.
 
 What Codeville enforces, whatever the agents are told (`backend/visualizer/team.py`):

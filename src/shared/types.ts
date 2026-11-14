@@ -157,4 +157,6 @@ export interface TeamRun {
   commit: { hash?: string; branch?: string; files?: number; message?: string; error?: string; next?: string } | null;
   notes: string;
   started: number;
+  /** The tests could not be run at all, so the work is done but not checked. */
+  untested?: boolean;
 }
