@@ -62,13 +62,14 @@ _runs: dict = {}
 _sessions: dict = {}  # project folder -> the Claude Code session to continue
 _lock = threading.Lock()
 _plugin: dict = {"at": 0.0, "installed": False}
-_denied: dict = {}  # project folder -> what Claude Code was not allowed to do in its last turn
+# project folder -> {"session": the conversation it happened in, "items": what Claude Code was not allowed to do}
+_denied: dict = {}
 MAX_ALLOWED = 10
 
 
 def denied_for(cwd: str) -> list:
     with _lock:
-        return list(_denied.get(_key(cwd), []))
+        return list((_denied.get(_key(cwd)) or {}).get("items", []))
 
 
 def allow_rules(denials: list) -> list:
@@ -270,7 +271,7 @@ class Turn:
                 self._push({"type": "tool", "source": "agent", "tool": str(denial.get("tool_name") or "tool"), "phase": "fail", "target": _target(inp) or None})
             # Kept so the user can allow exactly these and let Claude Code go on.
             with _lock:
-                _denied[_key(self.cwd)] = refused
+                _denied[_key(self.cwd)] = {"session": self.session, "items": refused}
             self.finish(text, bool(d.get("is_error")))
 
     def finish(self, text: str, failed: bool = False) -> None:
@@ -301,15 +302,17 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
     if fresh:
         forget_session(cwd)
     # The user may allow what the last turn was refused. It holds for this one prompt and for those exact commands.
+    resume = None if fresh else (session_id or session_for(cwd))
     with _lock:
-        refused = _denied.pop(_key(cwd), [])
-    also_allow = allow_rules(refused) if allow_denied else []
+        last = _denied.pop(_key(cwd), None) or {}
+    # Only in the conversation where it was refused: allowing in one conversation must never let another one run it.
+    same = bool(resume) and last.get("session") == resume
+    also_allow = allow_rules(last.get("items", [])) if allow_denied and same else []
     if allow_denied and not also_allow:
         raise AgentProblem(problem(
-            "There is nothing to allow any more", ["Codeville was restarted, or another prompt was sent since Claude Code was stopped"],
+            "There is nothing to allow any more", ["Codeville was restarted, or another prompt or conversation came in between"],
             "Send your request again. If Claude Code is stopped again, allow it then.",
         ))
-    resume = None if fresh else (session_id or session_for(cwd))
     hooked = plugin_installed()
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     proc = subprocess.Popen(

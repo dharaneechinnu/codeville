@@ -73,6 +73,8 @@ interface Ctx {
   agentSince: number;
   /** A prompt that was sent and has not come back from the agent yet. The chat shows it at once. */
   pending: { text: string; at: number } | null;
+  /** Forgets the waiting prompt, when the chat moves to another conversation. */
+  clearPending: () => void;
   /** Asks the connected agent to read the code and write the project map; the town rebuilds when it has. */
   askMap: () => Promise<void>;
   /** Forgets the agent's map and goes back to what the file names say. */
@@ -127,6 +129,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [agentSince, setAgentSince] = useState(0);
   const [pending, setPending] = useState<{ text: string; at: number } | null>(null);
   const [sending, setSending] = useState(false);
+  const clearPending = useCallback(() => setPending(null), []);
 
   const { events, output, live, connected } = useEventStream(useCallback((e: CvEvent) => townRef.current?.handleEvent(e), []));
 
@@ -318,7 +321,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const value: Ctx = {
     root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk, editorDocked, setEditorDocked,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
-    sendPrompt, agentParts, agentRunning, agentSince, pending, stopAgent, askMap, clearMap, mapping,
+    sendPrompt, agentParts, agentRunning, agentSince, pending, clearPending, stopAgent, askMap, clearMap, mapping,
   };
   return <CvContext.Provider value={value}>{children}</CvContext.Provider>;
 }

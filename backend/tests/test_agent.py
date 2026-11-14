@@ -216,3 +216,26 @@ def test_a_turn_without_usage_numbers_reports_none():
     feed(t, INIT, {"type": "result", "is_error": False, "result": "ok"})
     assert "usage" not in hub.recent(5)[-1]
     agent.forget_session("/p")
+
+
+def test_allowing_only_works_in_the_conversation_that_was_refused(monkeypatch, tmp_path):
+    cwd = str(tmp_path)
+    t, hub, _ = turn(cwd=cwd)  # this turn runs in session s-1
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    started = []
+    monkeypatch.setattr(agent, "claude_path", lambda: "claude")
+    monkeypatch.setattr(agent, "plugin_installed", lambda: True)
+
+    def popen(args, **kw):
+        started.append(args)
+        raise OSError("stop here")
+
+    monkeypatch.setattr(agent.subprocess, "Popen", popen)
+    # another conversation asks to allow: it gets nothing, and nothing is started
+    try:
+        agent.send_prompt("go on", cwd, hub, session_id="s-other", allow_denied=True)
+        assert False, "expected a problem"
+    except agent.AgentProblem as err:
+        assert err.problem["what"] == "There is nothing to allow any more"
+    assert started == []
+    agent.forget_session(cwd)

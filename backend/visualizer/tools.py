@@ -210,6 +210,14 @@ def project_command(kind: str, root: str, asked: str = "") -> tuple:
     return pick["command"], str((Path(root) / pick["cwd"]).resolve()) if pick["cwd"] else root
 
 
+def _has_command(kind: str, root: str) -> bool:
+    try:
+        _default_command(kind, root)
+        return True
+    except ToolError:
+        return False
+
+
 def run_check(args: dict, hub: EventHub) -> dict:
     kind = args.get("kind")
     if kind not in CHECK_KINDS:
@@ -219,7 +227,7 @@ def run_check(args: dict, hub: EventHub) -> dict:
     try:
         command, cwd = project_command(kind, root, (args.get("command") or "").strip())
     except ToolError:
-        if kind == "test":
+        if kind == "test" and not _has_command(kind, root):
             # A project with no test command has tests that did not run. Say it as an event, so the app and the team
             # know the change is untested instead of taking the agent's word for it.
             hub.push({"type": "run.end", "source": "terminal", "runId": new_id("run"), "kind": "test", "status": "fail", "passed": 0,

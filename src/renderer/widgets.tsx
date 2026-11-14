@@ -80,7 +80,7 @@ const clock = (t: number): string => new Date(t).toLocaleTimeString([], { hour: 
 const sessionName = (s: Session): string => `${clock(s.start)} · ${s.first ? s.first.slice(0, 26) : 'Claude Code session'}`;
 
 export function ChatWidget(): JSX.Element {
-  const { events, root, git, sendPrompt, agentParts, agentRunning, agentSince, pending, stopAgent, note, setNote, openEditor, analysis, askMap, mapping } = useCv();
+  const { events, root, git, sendPrompt, agentParts, agentRunning, agentSince, pending, clearPending, stopAgent, note, setNote, openEditor, analysis, askMap, mapping } = useCv();
   // What is typed stays with its project, so switching projects or restarting does not lose it.
   const draftKey = `cv.chat.draft:${root}`;
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? '');
@@ -152,7 +152,10 @@ export function ChatWidget(): JSX.Element {
   const shownId = picked === 'new' ? null : (picked ?? sessions[0]?.id ?? null);
   // Events with no session (git commits, pushes) belong to the project, so they show in every view.
   const mine = useMemo(() => events.filter((e) => !e.sessionId || e.sessionId === shownId), [events, shownId]);
-  const items = useMemo(() => (picked === 'new' ? [] : buildItems(mine, root)), [mine, picked, root]);
+  // A new session starts empty and shows only what happens from then on. An engine without sessions (anything but
+  // Claude Code) never starts one, so its prompts and answers are shown here by time instead.
+  const seen = useMemo(() => (picked === 'new' ? mine.filter((e) => e.ts >= newSince) : mine), [mine, picked, newSince]);
+  const items = useMemo(() => buildItems(seen, root), [seen, root]);
   // A prompt shows the moment it is sent. The agent reports it back a few seconds later; until then it is added here.
   const { shown, liveTurn } = useMemo((): { shown: ChatItem[]; liveTurn: ChatTurn | null } => {
     const list = [...items];
@@ -163,7 +166,7 @@ export function ChatWidget(): JSX.Element {
       }
       return null;
     };
-    if (pending && !mine.some((e) => e.type === 'prompt' && e.ts >= pending.at - 1500)) {
+    if (pending && !seen.some((e) => e.type === 'prompt' && e.ts >= pending.at - 1500)) {
       const end = lastTurn();
       // It ended before it could report the prompt (it could not start): the prompt still belongs above its error.
       if (end && end.prompt === undefined && end.ts >= pending.at - 1500) end.prompt = pending.text;
@@ -171,7 +174,7 @@ export function ChatWidget(): JSX.Element {
     }
     const end = lastTurn();
     return { shown: list, liveTurn: end && pending && end.ts >= pending.at - 1500 ? end : null };
-  }, [items, pending, mine]);
+  }, [items, pending, seen]);
 
   // Follow the answer as it is written, unless the user has scrolled up to read something.
   const stick = useRef(true);
@@ -260,6 +263,7 @@ export function ChatWidget(): JSX.Element {
                   key={x.id}
                   role="menuitem"
                   onClick={() => {
+                    clearPending();
                     setPicked(i === 0 ? null : x.id);
                     setSesMenu(false);
                   }}
@@ -277,6 +281,7 @@ export function ChatWidget(): JSX.Element {
           title="New session"
           aria-label="New session"
           onClick={() => {
+            clearPending();
             setNewSince(Date.now());
             setPicked('new');
             setSesMenu(false);
