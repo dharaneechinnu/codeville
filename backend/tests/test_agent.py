@@ -147,3 +147,50 @@ def test_claude_code_may_not_run_commands_through_codeville_without_asking():
     listed = allowed[allowed.index("--allowedTools") + 1].split(",")
     assert "mcp__codeville__git_status" in listed and "mcp__plugin_code-visualizer_codeville__save_project_map" in listed
     assert not any(t.endswith("run_check") or t in ("mcp__codeville", "mcp__plugin_code-visualizer_codeville") for t in listed)
+
+
+def test_the_user_can_allow_exactly_what_was_refused_and_nothing_wider(monkeypatch, tmp_path):
+    t, hub, _ = turn(cwd=str(tmp_path))
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [
+        {"tool_name": "Bash", "tool_input": {"command": "npm test -- --watch=false, please"}},
+        {"tool_name": "Bash", "tool_input": {"command": "echo a\nrm -rf x"}},  # several lines: cannot be named exactly
+        {"tool_name": "WebFetch", "tool_input": {"url": "https://example.com"}},
+        {"tool_name": "Bash(rm -rf /)", "tool_input": {}},  # not a tool name
+    ]})
+    assert agent.allow_rules(agent.denied_for(str(tmp_path))) == ["Bash(npm test -- --watch=false, please)", "WebFetch"]
+
+    started = {}
+
+    class Proc:
+        stdin = stdout = stderr = None
+        returncode = 0
+
+    def popen(args, **kw):
+        started["args"] = args
+        raise OSError("stop here")
+
+    monkeypatch.setattr(agent, "claude_path", lambda: "claude")
+    monkeypatch.setattr(agent, "plugin_installed", lambda: True)
+    monkeypatch.setattr(agent.subprocess, "Popen", popen)
+    try:
+        agent.send_prompt("go on", str(tmp_path), hub, allow_denied=True)
+    except OSError:
+        pass
+    at = started["args"].index("--allowedTools")
+    # each allowed command is its own value, so the comma inside it does not split it
+    assert started["args"][at + 2:] == ["Bash(npm test -- --watch=false, please)", "WebFetch"]
+    # it held for that one prompt: asking again finds nothing to allow
+    try:
+        agent.send_prompt("again", str(tmp_path), hub, allow_denied=True)
+        assert False, "expected a problem"
+    except agent.AgentProblem as err:
+        assert err.problem["what"] == "There is nothing to allow any more"
+    agent.forget_session(str(tmp_path))
+
+
+def test_a_normal_prompt_never_carries_extra_permissions(tmp_path):
+    t, hub, _ = turn(cwd=str(tmp_path))
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    args = agent.build_args("claude", None, True, None, True)
+    assert args[args.index("--allowedTools") + 2:] == []
+    agent.forget_session(str(tmp_path))

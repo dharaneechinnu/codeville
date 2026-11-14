@@ -176,9 +176,11 @@ export interface TurnProps {
   onOpen: (path: string) => void;
   /** Sends this turn's prompt again. */
   onRetry?: () => void;
+  /** Lets the agent run what it was refused in this turn, and go on. */
+  onAllow?: () => void;
 }
 
-export function TurnView({ turn, root, who, live, onOpen, onRetry }: TurnProps): JSX.Element {
+export function TurnView({ turn, root, who, live, onOpen, onRetry, onAllow }: TurnProps): JSX.Element {
   const running = !!live?.running;
   const parts = live?.parts ?? [];
   // While it works, and when it ended without a final message, the live stream is the best account of the turn.
@@ -216,6 +218,16 @@ export function TurnView({ turn, root, who, live, onOpen, onRetry }: TurnProps):
           )}
           {turn.ended && !turn.answer && <div className="tool dim"><i /><span className="steptext">Finished without a message.</span></div>}
         </>
+      )}
+      {onAllow && !running && turn.ended && turn.steps.some((s) => s.bad) && (
+        <div className="cc warn" role="status">
+          <b>{who} was stopped {turn.steps.filter((s) => s.bad).length === 1 ? 'once' : `${turn.steps.filter((s) => s.bad).length} times`}: it needs your OK</b>
+          {turn.steps.filter((s) => s.bad).map((s) => <code key={s.id} className="asked">{s.text.replace(/^Ran /, '')}</code>)}
+          <div><i>Note</i>Allowing covers these exact commands, for the next reply only.</div>
+          <div className="mbtn">
+            <button onClick={onAllow}>Allow and continue</button>
+          </div>
+        </div>
       )}
       {stopped && !running && (
         <div className="tool dim">

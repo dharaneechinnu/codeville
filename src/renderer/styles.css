@@ -591,3 +591,4 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .pbar > .menuwrap .ch { max-width: 110px; }
 .tool.bad b { font-weight: 700; }
 .phint .branch { float: right; margin-left: 8px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.cc .asked { font: 12px var(--mono); background: rgba(0,0,0,.3); border: 1px solid #6a5a1f; padding: 3px 6px; overflow-wrap: anywhere; white-space: pre-wrap; }

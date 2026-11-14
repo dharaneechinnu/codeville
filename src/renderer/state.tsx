@@ -65,7 +65,7 @@ interface Ctx {
   gitAct: (path: string, body: Record<string, unknown>) => Promise<boolean>;
   run: (command: string, cwd?: string) => Promise<void>;
   /** Sends a prompt to an AI engine. Claude Code continues the project's conversation unless `fresh` starts a new one or `sessionId` names another. */
-  sendPrompt: (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string }) => Promise<boolean>;
+  sendPrompt: (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string; allowDenied?: boolean }) => Promise<boolean>;
   /** What the agent has said and done in the prompt that is running, or that ran last. */
   agentParts: LivePart[];
   agentRunning: boolean;
@@ -233,7 +233,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   );
 
   const sendPrompt = useCallback(
-    async (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string }): Promise<boolean> => {
+    async (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string; allowDenied?: boolean }): Promise<boolean> => {
       if (!root) return false;
       try {
         const sentAt = Date.now() - 500;
@@ -241,7 +241,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
         // From this moment it is working: starting the agent takes a few seconds, and the chat says so.
         setAgentRun(null);
         setSending(true);
-        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, fresh: opts?.fresh ?? false, sessionId: opts?.sessionId ?? '', engine: opts?.engine ?? 'claude' });
+        const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, fresh: opts?.fresh ?? false, sessionId: opts?.sessionId ?? '', engine: opts?.engine ?? 'claude', allowDenied: opts?.allowDenied ?? false });
         setAgentSince(sentAt);
         setAgentRun(r.runId);
         return true;

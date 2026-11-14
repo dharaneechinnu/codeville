@@ -62,6 +62,33 @@ _runs: dict = {}
 _sessions: dict = {}  # project folder -> the Claude Code session to continue
 _lock = threading.Lock()
 _plugin: dict = {"at": 0.0, "installed": False}
+_denied: dict = {}  # project folder -> what Claude Code was not allowed to do in its last turn
+MAX_ALLOWED = 10
+
+
+def denied_for(cwd: str) -> list:
+    with _lock:
+        return list(_denied.get(_key(cwd), []))
+
+
+def allow_rules(denials: list) -> list:
+    """Permission rules for exactly what was refused: the same command, word for word, and nothing wider. Another
+    tool (a web page, for example) is allowed by its name, since it has no command to pin down."""
+    rules: list = []
+    for d in denials:
+        tool, inp = str(d.get("tool") or ""), d.get("input") if isinstance(d.get("input"), dict) else {}
+        command = inp.get("command")
+        if tool == "Bash":
+            if not isinstance(command, str) or not command.strip() or "\n" in command:
+                continue  # a command over several lines cannot be named exactly; it stays blocked
+            rule = f"Bash({command.strip()})"
+        elif re.fullmatch(r"[A-Za-z][\w-]*", tool):
+            rule = tool
+        else:
+            continue
+        if rule not in rules:
+            rules.append(rule)
+    return rules[:MAX_ALLOWED]
 
 
 def claude_path() -> Optional[str]:
@@ -108,7 +135,8 @@ def mcp_config() -> Optional[str]:
     return str(target)
 
 
-def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optional[str], hooked: bool) -> list:
+def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optional[str], hooked: bool,
+               also_allow: Optional[list] = None) -> list:
     """The prompt itself goes in on standard input, so long prompts with new lines survive every shell."""
     args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
     if resume:
@@ -121,7 +149,8 @@ def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optio
         cfg = mcp_config()
         if cfg:
             args += ["--mcp-config", cfg]
-    args += ["--allowedTools", ",".join(ALLOWED_TOOLS)]
+    # What the user allowed for this one prompt goes in as its own values, so a comma in a command stays in it.
+    args += ["--allowedTools", ",".join(ALLOWED_TOOLS), *(also_allow or [])]
     return args
 
 
@@ -216,11 +245,16 @@ class Turn:
             if d.get("is_error") and NOT_SIGNED_IN.search(text):
                 text = SIGN_IN_HELP
             # Something Claude Code wanted to do and was not allowed to. Without this the user only sees it give up.
+            refused = []
             for denial in d.get("permission_denials") or []:
                 if not isinstance(denial, dict):
                     continue
                 inp = denial.get("tool_input") if isinstance(denial.get("tool_input"), dict) else {}
+                refused.append({"tool": str(denial.get("tool_name") or ""), "input": inp})
                 self._push({"type": "tool", "source": "agent", "tool": str(denial.get("tool_name") or "tool"), "phase": "fail", "target": _target(inp) or None})
+            # Kept so the user can allow exactly these and let Claude Code go on.
+            with _lock:
+                _denied[_key(self.cwd)] = refused
             self.finish(text, bool(d.get("is_error")))
 
     def finish(self, text: str, failed: bool = False) -> None:
@@ -235,7 +269,8 @@ class Turn:
 
 def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = None,
                 on_output: Optional[Callable[[str, str, str], None]] = None, accept_edits: bool = True,
-                session_id: Optional[str] = None, fresh: bool = False, engine: str = "claude") -> str:
+                session_id: Optional[str] = None, fresh: bool = False, engine: str = "claude",
+                allow_denied: bool = False) -> str:
     """Sends one prompt. With Claude Code it continues the project's conversation unless `fresh` asks for a new one or
     `session_id` names another one to continue. Any other engine gets the prompt on its own."""
     if engine != "claude":
@@ -248,11 +283,20 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
         ))
     if fresh:
         forget_session(cwd)
+    # The user may allow what the last turn was refused. It holds for this one prompt and for those exact commands.
+    with _lock:
+        refused = _denied.pop(_key(cwd), [])
+    also_allow = allow_rules(refused) if allow_denied else []
+    if allow_denied and not also_allow:
+        raise AgentProblem(problem(
+            "There is nothing to allow any more", ["Codeville was restarted, or another prompt was sent since Claude Code was stopped"],
+            "Send your request again. If Claude Code is stopped again, allow it then.",
+        ))
     resume = None if fresh else (session_id or session_for(cwd))
     hooked = plugin_installed()
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     proc = subprocess.Popen(
-        build_args(exe, model, accept_edits, resume, hooked), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        build_args(exe, model, accept_edits, resume, hooked, also_allow), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         stdin=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", creationflags=flags,
     )
     try:

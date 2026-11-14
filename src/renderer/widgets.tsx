@@ -210,11 +210,11 @@ export function ChatWidget(): JSX.Element {
   };
 
   /** Sends one prompt to the engine and the session that are picked. */
-  const send = async (prompt: string): Promise<boolean> => {
+  const send = async (prompt: string, allowDenied = false): Promise<boolean> => {
     toEnd();
     // A new session starts a fresh conversation; a picked older one is continued; otherwise the current one goes on.
     // Only Claude Code has named models and sessions; the other engines take the prompt on its own.
-    return sendPrompt(prompt, engine === 'claude' ? model : '', { fresh: picked === 'new', sessionId: picked && picked !== 'new' ? picked : undefined, engine });
+    return sendPrompt(prompt, engine === 'claude' ? model : '', { fresh: picked === 'new', sessionId: picked && picked !== 'new' ? picked : undefined, engine, allowDenied });
   };
 
   const go = async (): Promise<void> => {
@@ -311,6 +311,7 @@ export function ChatWidget(): JSX.Element {
               live={it.turn === liveTurn ? { parts: agentParts, since: (pending?.at ?? agentSince) + 500, running: agentRunning } : undefined}
               onOpen={openEditor}
               onRetry={i === shown.length - 1 && !agentRunning && it.turn.prompt ? () => void send(it.turn.prompt!) : undefined}
+              onAllow={i === shown.length - 1 && !agentRunning && engine === 'claude' && picked !== 'new' ? () => void send('I allow it. Run what you were stopped from running, then finish.', true) : undefined}
             />
           ),
         )}
