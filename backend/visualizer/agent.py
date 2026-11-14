@@ -175,6 +175,9 @@ class Turn:
         self.buf = ""
         self.done = False
         self.failed = ""
+        # How full the conversation's memory is after this turn, and what the turn cost. Shown as a ring in the chat.
+        self.context = 0
+        self.usage: Optional[dict] = None
 
     def _push(self, event: dict) -> None:
         self.hub.push({**event, **({"sessionId": self.session} if self.session else {})})
@@ -225,6 +228,12 @@ class Turn:
             elif ev.get("type") == "content_block_stop":
                 self._flush(True)
         elif kind == "assistant":
+            # What the model was sent for this step is what the conversation now holds; the last step counts.
+            u = (d.get("message") or {}).get("usage")
+            if isinstance(u, dict):
+                sent = sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+                if sent:
+                    self.context = sent + int(u.get("output_tokens") or 0)
             for block in (d.get("message") or {}).get("content") or []:
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
@@ -245,6 +254,13 @@ class Turn:
             if d.get("is_error") and NOT_SIGNED_IN.search(text):
                 text = SIGN_IN_HELP
             # Something Claude Code wanted to do and was not allowed to. Without this the user only sees it give up.
+            models = d.get("modelUsage") if isinstance(d.get("modelUsage"), dict) else {}
+            window = max([int(m.get("contextWindow") or 0) for m in models.values() if isinstance(m, dict)] or [0])
+            total = d.get("usage") if isinstance(d.get("usage"), dict) else {}
+            if self.context and window:
+                cost = d.get("total_cost_usd")
+                self.usage = {"used": self.context, "window": window, "out": int(total.get("output_tokens") or 0),
+                              "cost": round(float(cost), 4) if isinstance(cost, (int, float)) else None}
             refused = []
             for denial in d.get("permission_denials") or []:
                 if not isinstance(denial, dict):
@@ -264,7 +280,8 @@ class Turn:
         if failed and text:
             self.emit(text, "err")
         # The whole answer, also with the plugin: its Stop hook reports the last words too, and the chat shows one of them.
-        self._push({"type": "turn.end", "source": "app", "message": text[:ANSWER_KEPT] or None, **({"failed": True} if failed else {})})
+        self._push({"type": "turn.end", "source": "app", "message": text[:ANSWER_KEPT] or None, **({"failed": True} if failed else {}),
+                    **({"usage": self.usage} if self.usage else {})})
 
 
 def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = None,

@@ -245,3 +245,55 @@ export function TurnView({ turn, root, who, live, onOpen, onRetry, onAllow }: Tu
     </div>
   );
 }
+
+/** How full the conversation's memory is, as a ring: the same idea as the circle in Claude Code's own window. */
+export function UsageRing({ events, who }: { events: CvEvent[]; who: string }): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  let last: { used: number; window: number; out: number; cost: number | null } | null = null;
+  let spent = 0;
+  let turns = 0;
+  for (const e of events) {
+    if (e.type !== 'turn.end' || !e.usage) continue;
+    last = e.usage;
+    spent += e.usage.cost ?? 0;
+    turns += 1;
+  }
+  const share = last ? Math.min(1, last.used / last.window) : 0;
+  const pct = Math.round(share * 100);
+  const level = pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok';
+  const R = 7;
+  const C = 2 * Math.PI * R;
+  const k = (n: number): string => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : String(n));
+  const label = last ? `${pct}% of the conversation's memory is used` : 'Memory use shows after the first reply';
+  return (
+    <div className="menuwrap usage">
+      <button className={`ring ${level}`} aria-haspopup="dialog" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen((v) => !v)}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+          <circle cx="10" cy="10" r={R} className="track" />
+          <circle cx="10" cy="10" r={R} className="fill" strokeDasharray={`${share * C} ${C}`} transform="rotate(-90 10 10)" />
+        </svg>
+        {last && pct >= 70 && <span>{pct}%</span>}
+      </button>
+      {open && (
+        <div className="menu usagecard" role="dialog" aria-label="Usage">
+          <div className="mh">{who} usage</div>
+          {last ? (
+            <>
+              <div className="ubar" aria-hidden="true"><i className={level} style={{ width: `${Math.max(2, pct)}%` }} /></div>
+              <dl>
+                <dt>Memory used</dt><dd>{k(last.used)} of {k(last.window)} tokens ({pct}%)</dd>
+                <dt>Room left</dt><dd>{k(Math.max(0, last.window - last.used))} tokens</dd>
+                <dt>Last reply</dt><dd>{k(last.out)} tokens written{last.cost !== null ? ` · about $${last.cost.toFixed(2)}` : ''}</dd>
+                <dt>This conversation</dt><dd>{turns} {turns === 1 ? 'reply' : 'replies'}{spent > 0 ? ` · about $${spent.toFixed(2)}` : ''}</dd>
+              </dl>
+              <p className="mut small">{pct >= 70 ? 'It is getting full. Start a new session (the + button above) for a new task, so answers stay sharp.' : 'Every reply rereads the whole conversation. A new session starts again from empty.'}</p>
+              {spent > 0 && <p className="mut small">Cost is what the tokens would cost at list price. On a subscription plan it is not billed per reply.</p>}
+            </>
+          ) : (
+            <p className="mut small pad">Send a prompt. After the reply, this shows how much of the conversation's memory is used and what the reply cost.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

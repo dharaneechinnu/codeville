@@ -194,3 +194,25 @@ def test_a_normal_prompt_never_carries_extra_permissions(tmp_path):
     args = agent.build_args("claude", None, True, None, True)
     assert args[args.index("--allowedTools") + 2:] == []
     agent.forget_session(str(tmp_path))
+
+
+def test_a_turn_reports_how_full_the_conversation_is_and_what_it_cost():
+    t, hub, _ = turn()
+
+    def step(sent, out):
+        return {"type": "assistant", "message": {"content": [], "usage": {"input_tokens": 2, "cache_read_input_tokens": sent, "cache_creation_input_tokens": 0, "output_tokens": out}}}
+
+    feed(t, INIT, step(30000, 50), step(41000, 120),
+         {"type": "result", "is_error": False, "result": "ok", "total_cost_usd": 0.20526, "usage": {"output_tokens": 170},
+          "modelUsage": {"claude-x": {"contextWindow": 200000}}})
+    usage = hub.recent(5)[-1]["usage"]
+    # the last step is what the conversation holds now; earlier steps are not added on top
+    assert usage == {"used": 41122, "window": 200000, "out": 170, "cost": 0.2053}
+    agent.forget_session("/p")
+
+
+def test_a_turn_without_usage_numbers_reports_none():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "ok"})
+    assert "usage" not in hub.recent(5)[-1]
+    agent.forget_session("/p")

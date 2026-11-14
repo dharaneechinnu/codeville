@@ -124,6 +124,8 @@ export class Town {
   private linkGroup = new THREE.Group();
   private pulses: { floor: Floor; start: number }[] = [];
   private raf = 0;
+  /** One vector reused every frame, instead of a new one per label per frame. */
+  private spot = new THREE.Vector3();
   private ro: ResizeObserver;
   private labels: HTMLDivElement;
   private down = { x: 0, y: 0 };
@@ -895,6 +897,8 @@ export class Town {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
+    // Nothing to draw while the window is hidden or the town is on a tab that is not shown.
+    if (document.hidden || this.host.clientWidth === 0) return;
     const now = performance.now();
     this.pulses = this.pulses.filter((p) => {
       const t = (now - p.start) / 900;
@@ -922,7 +926,7 @@ export class Town {
     }
     for (const d of this.districts) {
       const top = Math.max(0.5, ...d.buildings.map((b) => b.height));
-      const v = new THREE.Vector3(d.x, top + 2.4, d.z).project(this.camera);
+      const v = this.spot.set(d.x, top + 2.4, d.z).project(this.camera);
       d.label.style.display = v.z > 1 ? 'none' : 'block';
       d.label.style.transform = `translate(${((v.x + 1) / 2) * rect.width}px, ${((1 - v.y) / 2) * rect.height}px) translate(-50%, -100%)`;
       d.label.classList.toggle('active', d.buildings.some((b) => now < b.activeUntil));

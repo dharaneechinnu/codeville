@@ -6,7 +6,7 @@ import { useAgentLink } from './agentlink.js';
 import { openEngines, useEngines } from './engines.js';
 import { TeamRunCard, TeamToggle, useTeam } from './team.js';
 import { api } from './api.js';
-import { buildItems, TurnView, type ChatItem, type ChatTurn } from './chat.js';
+import { buildItems, TurnView, UsageRing, type ChatItem, type ChatTurn } from './chat.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -418,6 +418,7 @@ export function ChatWidget(): JSX.Element {
               )}
             </div>}
             <span className="sp" />
+            {!teamOn && engine === 'claude' && <UsageRing events={picked === 'new' ? [] : mine.filter((e) => e.sessionId === shownId)} who="Claude Code" />}
             {agentRunning ? (
               <button className="send stop" onClick={() => void stopAgent()} title="Stop (Esc)" aria-label="Stop">
                 <Ico name="stop" />

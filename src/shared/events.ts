@@ -33,7 +33,7 @@ export type CvEvent = Base &
     | { type: 'session.start'; cwd: string; agent: string; model?: string }
     | { type: 'session.end' }
     | { type: 'prompt'; text: string }
-    | { type: 'turn.end'; message?: string; /** The turn ended in an error instead of an answer. */ failed?: boolean }
+    | { type: 'turn.end'; message?: string; /** The turn ended in an error instead of an answer. */ failed?: boolean; /** How full the conversation's memory is (tokens used of the model's window), and the estimated cost of this turn in US dollars. */ usage?: { used: number; window: number; out: number; cost: number | null } }
     | { type: 'agent.start'; agentId: string; agentType?: string }
     | { type: 'agent.stop'; agentId: string; agentType?: string }
     | { type: 'tool'; tool: string; phase: 'start' | 'end' | 'fail'; target?: string; agentId?: string }

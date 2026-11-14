@@ -592,3 +592,23 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .tool.bad b { font-weight: 700; }
 .phint .branch { float: right; margin-left: 8px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .cc .asked { font: 12px var(--mono); background: rgba(0,0,0,.3); border: 1px solid #6a5a1f; padding: 3px 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* usage ring: how full the conversation's memory is */
+.pbar > .usage { flex: none; }
+.ring { display: inline-flex; align-items: center; gap: 4px; background: transparent; border: 1px solid transparent; padding: 3px 5px; font: 11px var(--mono); color: var(--muted); }
+.ring:hover, .ring[aria-expanded='true'] { border-color: var(--line); color: var(--text); }
+.ring circle { fill: none; stroke-width: 3; }
+.ring .track { stroke: #2a3158; }
+.ring .fill { stroke: var(--accent); stroke-linecap: butt; transition: stroke-dasharray .4s; }
+.ring.warn .fill { stroke: var(--warn); } .ring.bad .fill { stroke: var(--bad); }
+.ring.warn span { color: var(--warn); } .ring.bad span { color: var(--bad); }
+.pbar .usage .usagecard { left: auto; right: -52px; width: 268px; padding-bottom: 8px; }
+.usagecard dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 6px 10px; font-size: 12px; }
+.usagecard dt { color: var(--muted); } .usagecard dd { margin: 0; text-align: right; font-family: var(--mono); font-size: 11.5px; }
+.usagecard p { margin: 6px 10px 0; }
+.ubar { height: 6px; background: #2a3158; margin: 8px 10px 4px; }
+.ubar i { display: block; height: 100%; background: var(--accent); } .ubar i.warn { background: var(--warn); } .ubar i.bad { background: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .ring .fill { transition: none; } }
+.pbox { position: relative; }
+.pbar > .usage { position: static; }
+.pbar .usage .usagecard { left: 6px; right: 6px; width: auto; bottom: 44px; top: auto; }
