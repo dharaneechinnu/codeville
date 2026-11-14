@@ -103,7 +103,7 @@ export function TerminalPopup(): JSX.Element | null {
       </div>
       <div className="termout" ref={out} role="log" aria-label="Terminal output">
         {output.length === 0 && <div className="dim">Run a command. Test, lint and build results also show in the Test view.</div>}
-        {output.slice(-250).map((o, i) => (
+        {output.filter((o) => o.stream !== 'delta').slice(-250).map((o, i) => (
           <div key={i} className={o.stream === 'err' ? 'tbad' : ''}>
             {o.line}
           </div>

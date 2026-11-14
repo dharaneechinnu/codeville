@@ -41,13 +41,24 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
 export interface OutputLine {
   runId: string;
   line: string;
-  stream: 'out' | 'err';
+  /** out and err are whole lines. delta is a piece of an answer as it is written; tool is one thing an agent did. */
+  stream: 'out' | 'err' | 'delta' | 'tool';
+}
+
+/** One piece of an answer that is being written: words, something the agent did, or an error it printed. */
+export interface LivePart {
+  kind: 'text' | 'tool' | 'err';
+  text: string;
 }
 
 /** Follows the live event stream and the terminal output. Reconnects by itself. */
-export function useEventStream(onEvent: (e: CvEvent) => void): { events: CvEvent[]; output: OutputLine[]; connected: boolean } {
+export function useEventStream(onEvent: (e: CvEvent) => void): { events: CvEvent[]; output: OutputLine[]; live: Record<string, LivePart[]>; connected: boolean } {
   const [events, setEvents] = useState<CvEvent[]>([]);
   const [output, setOutput] = useState<OutputLine[]>([]);
+  // What each run has said so far, for the chat. Words arrive many times a second, so the screen follows in small steps.
+  const [live, setLive] = useState<Record<string, LivePart[]>>({});
+  const runs = useRef(new Map<string, { parts: LivePart[]; streamed: boolean }>());
+  const paint = useRef(0);
   const [connected, setConnected] = useState(false);
   const handler = useRef(onEvent);
   handler.current = onEvent;
@@ -69,7 +80,31 @@ export function useEventStream(onEvent: (e: CvEvent) => void): { events: CvEvent
     es.addEventListener('output', (m) => {
       try {
         const o = JSON.parse((m as MessageEvent<string>).data) as OutputLine;
-        setOutput((prev) => [...prev.slice(-299), o]);
+        let run = runs.current.get(o.runId);
+        if (!run) {
+          run = { parts: [], streamed: false };
+          runs.current.set(o.runId, run);
+          if (runs.current.size > 6) runs.current.delete(runs.current.keys().next().value as string);
+        }
+        const say = (text: string): void => {
+          const end = run!.parts[run!.parts.length - 1];
+          if (end?.kind === 'text') end.text += text;
+          else run!.parts.push({ kind: 'text', text });
+        };
+        if (o.stream === 'delta') {
+          run.streamed = true;
+          say(o.line);
+        } else if (o.stream === 'tool') run.parts.push({ kind: 'tool', text: o.line });
+        else if (o.stream === 'err') run.parts.push({ kind: 'err', text: o.line });
+        else if (!run.streamed) say(`${o.line}\n`); // an engine that prints whole lines
+        if (run.parts.length > 400) run.parts.splice(0, run.parts.length - 400);
+        if (!paint.current) {
+          paint.current = window.setTimeout(() => {
+            paint.current = 0;
+            setLive(Object.fromEntries([...runs.current].map(([id, r]) => [id, r.parts.map((p) => ({ ...p }))])));
+          }, 50);
+        }
+        if (o.stream !== 'delta') setOutput((prev) => [...prev.slice(-299), o]);
       } catch {
         // Ignore.
       }
@@ -77,5 +112,5 @@ export function useEventStream(onEvent: (e: CvEvent) => void): { events: CvEvent
     return () => es.close();
   }, []);
 
-  return { events, output, connected };
+  return { events, output, live, connected };
 }

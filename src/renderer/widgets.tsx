@@ -6,6 +6,7 @@ import { useAgentLink } from './agentlink.js';
 import { openEngines, useEngines } from './engines.js';
 import { TeamRunCard, TeamToggle, useTeam } from './team.js';
 import { api } from './api.js';
+import { buildItems, TurnView, type ChatItem, type ChatTurn } from './chat.js';
 
 const OPEN_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -46,8 +47,6 @@ const MODELS: { label: string; value: string }[] = [
   { label: 'Haiku', value: 'haiku' },
 ];
 
-type Line = { id: string; kind: 'user' | 'agent' | 'tool' | 'note'; text: string; path?: string };
-
 interface Session {
   id: string;
   cwd: string;
@@ -80,22 +79,24 @@ function sessionsOf(events: CvEvent[], root: string): Session[] {
 const clock = (t: number): string => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const sessionName = (s: Session): string => `${clock(s.start)} · ${s.first ? s.first.slice(0, 26) : 'Claude Code session'}`;
 
-function toLines(events: CvEvent[]): Line[] {
-  const out: Line[] = [];
-  for (const e of events.slice(-300)) {
-    if (e.type === 'prompt') out.push({ id: e.id, kind: 'user', text: e.text });
-    else if (e.type === 'turn.end' && e.message) out.push({ id: e.id, kind: 'agent', text: e.message });
-    else if (e.type === 'file.change') out.push({ id: e.id, kind: 'tool', text: `${e.op === 'write' ? 'Wrote' : 'Edited'} `, path: e.path });
-    else if (e.type === 'agent.start') out.push({ id: e.id, kind: 'note', text: `Sub-agent started${e.agentType ? ` (${e.agentType})` : ''}` });
-    else if (e.type === 'git.commit') out.push({ id: e.id, kind: 'note', text: `Committed ${e.files} files on ${e.branch}` });
-    else if (e.type === 'git.push') out.push({ id: e.id, kind: 'note', text: `Pushed ${e.branch}` });
-  }
-  return out.slice(-120);
-}
-
 export function ChatWidget(): JSX.Element {
-  const { events, root, git, sendPrompt, agentLines, agentRunning, stopAgent, note, setNote, openEditor, analysis, askMap, mapping } = useCv();
-  const [text, setText] = useState('');
+  const { events, root, git, sendPrompt, agentParts, agentRunning, agentSince, pending, stopAgent, note, setNote, openEditor, analysis, askMap, mapping } = useCv();
+  // What is typed stays with its project, so switching projects or restarting does not lose it.
+  const draftKey = `cv.chat.draft:${root}`;
+  const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? '');
+  useEffect(() => {
+    setText(localStorage.getItem(draftKey) ?? '');
+    // Only when the project changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [root]);
+  useEffect(() => {
+    try {
+      if (text) localStorage.setItem(draftKey, text);
+      else localStorage.removeItem(draftKey);
+    } catch {
+      // Keeping the draft is a convenience only.
+    }
+  }, [text, draftKey]);
   const [model, setModel] = useState('');
   const [menu, setMenu] = useState(false);
   // Which AI engine the Chat sends to. Claude Code has named models; the others use their own default.
@@ -151,21 +152,55 @@ export function ChatWidget(): JSX.Element {
   const shownId = picked === 'new' ? null : (picked ?? sessions[0]?.id ?? null);
   // Events with no session (git commits, pushes) belong to the project, so they show in every view.
   const mine = useMemo(() => events.filter((e) => !e.sessionId || e.sessionId === shownId), [events, shownId]);
-  const lines = useMemo(() => (picked === 'new' ? [] : toLines(mine)), [mine, picked]);
-
-  // Once a turn has ended with Claude's answer in the conversation, the live transcript above it has done its job.
-  const answered = useMemo(() => {
-    for (let i = mine.length - 1; i >= 0; i--) {
-      const e = mine[i]!;
-      if (e.type === 'turn.end') return !!e.message;
-      if (e.type === 'prompt') return false;
+  const items = useMemo(() => (picked === 'new' ? [] : buildItems(mine, root)), [mine, picked, root]);
+  // A prompt shows the moment it is sent. The agent reports it back a few seconds later; until then it is added here.
+  const { shown, liveTurn } = useMemo((): { shown: ChatItem[]; liveTurn: ChatTurn | null } => {
+    const list = [...items];
+    const lastTurn = (): ChatTurn | null => {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const it = list[i]!;
+        if (it.kind === 'turn') return it.turn;
+      }
+      return null;
+    };
+    if (pending && !mine.some((e) => e.type === 'prompt' && e.ts >= pending.at - 1500)) {
+      const end = lastTurn();
+      // It ended before it could report the prompt (it could not start): the prompt still belongs above its error.
+      if (end && end.prompt === undefined && end.ts >= pending.at - 1500) end.prompt = pending.text;
+      else list.push({ kind: 'turn', turn: { id: `pending${pending.at}`, ts: pending.at, prompt: pending.text, steps: [], answer: '', ended: false, failed: false } });
     }
-    return false;
-  }, [mine]);
+    const end = lastTurn();
+    return { shown: list, liveTurn: end && pending && end.ts >= pending.at - 1500 ? end : null };
+  }, [items, pending, mine]);
 
-  useEffect(() => {
+  // Follow the answer as it is written, unless the user has scrolled up to read something.
+  const stick = useRef(true);
+  const [away, setAway] = useState(false);
+  const toEnd = (): void => {
+    stick.current = true;
+    setAway(false);
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-  }, [lines.length, agentLines.length]);
+  };
+  const onScroll = (): void => {
+    const el = scroller.current;
+    if (!el) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    setAway(!stick.current);
+  };
+  useEffect(() => {
+    if (stick.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+  }, [shown, agentParts, agentRunning, shownId]);
+  useEffect(() => {
+    // The box is ready for the next message as soon as the answer is in.
+    if (!agentRunning) box.current?.focus();
+  }, [agentRunning]);
+  const lastPrompt = useMemo(() => {
+    for (let i = shown.length - 1; i >= 0; i--) {
+      const it = shown[i]!;
+      if (it.kind === 'turn' && it.turn.prompt) return it.turn.prompt;
+    }
+    return '';
+  }, [shown]);
 
   const grow = (): void => {
     const t = box.current;
@@ -174,9 +209,17 @@ export function ChatWidget(): JSX.Element {
     t.style.height = `${Math.min(150, t.scrollHeight + 2)}px`;
   };
 
+  /** Sends one prompt to the engine and the session that are picked. */
+  const send = async (prompt: string): Promise<boolean> => {
+    toEnd();
+    // A new session starts a fresh conversation; a picked older one is continued; otherwise the current one goes on.
+    // Only Claude Code has named models and sessions; the other engines take the prompt on its own.
+    return sendPrompt(prompt, engine === 'claude' ? model : '', { fresh: picked === 'new', sessionId: picked && picked !== 'new' ? picked : undefined, engine });
+  };
+
   const go = async (): Promise<void> => {
     const prompt = text.trim();
-    if (!prompt || !root) return;
+    if (!prompt || !root || agentRunning) return;
     if (!localStorage.getItem('cv.app.agentOk')) {
       setConfirm(true);
       return;
@@ -192,10 +235,11 @@ export function ChatWidget(): JSX.Element {
       }
       return;
     }
-    // A new session starts a fresh conversation; a picked older one is continued; otherwise the current one goes on.
-    // Only Claude Code has named models and sessions; the other engines take the prompt on its own.
-    if (await sendPrompt(prompt, engine === 'claude' ? model : '', { fresh: picked === 'new', sessionId: picked && picked !== 'new' ? picked : undefined, engine })) {
-      setText('');
+    // The box empties at once, like every chat. If sending fails, the words come back.
+    setText('');
+    requestAnimationFrame(grow);
+    if (!(await send(prompt))) {
+      setText((now) => now || prompt);
       requestAnimationFrame(grow);
     }
   };
@@ -241,9 +285,9 @@ export function ChatWidget(): JSX.Element {
           <Ico name="newChat" />
         </button>
       </div>
-      <div className="msgs" ref={scroller}>
+      <div className="msgs" ref={scroller} onScroll={onScroll} role="log" aria-label="Conversation">
         {!root && <p className="mut">Open a project to start.</p>}
-        {root && lines.length === 0 && agentLines.length === 0 && (
+        {root && shown.length === 0 && (
           <p className="mut">{teamOn ? 'Describe a feature or a fix. The Lead picks the specialists it needs and shows you its pick before anyone starts.' : engine === 'claude' ? 'Tell Claude Code what to build. It runs on this computer with your own sign-in, remembers this conversation, and everything it does shows up here and in the town.' : `Tell ${engineLabel} what to build. It runs on this computer with your own sign-in, and what it prints shows up here.`}</p>
         )}
         {root && engine === 'claude' && !link.claudeFound && (
@@ -252,41 +296,31 @@ export function ChatWidget(): JSX.Element {
         {root && engine === 'claude' && link.claudeFound && !link.signedIn && (
           <div className="cc err"><b>Claude Code is not signed in</b><div><i>Next</i>Open a terminal, run `claude` and sign in. This message goes away by itself.</div></div>
         )}
-        {lines.map((l) =>
-          l.kind === 'user' ? (
-            <div key={l.id} className="m user">
-              <span className="who">You</span>
-              {l.text}
-            </div>
-          ) : l.kind === 'agent' ? (
-            <div key={l.id} className="m">
-              <span className="who">Claude Code</span>
-              {l.text}
-            </div>
-          ) : l.kind === 'tool' ? (
-            <div key={l.id} className="tool">
+        {shown.map((it, i) =>
+          it.kind === 'note' ? (
+            <div key={it.id} className="tool dim">
               <i />
-              {l.text}
-              <button className="lnk" onClick={() => l.path && openEditor(l.path)}>
-                {l.path}
-              </button>
+              <span className="steptext">{it.text}</span>
             </div>
           ) : (
-            <div key={l.id} className="tool dim">
-              <i />
-              {l.text}
-            </div>
+            <TurnView
+              key={it.turn.id}
+              turn={it.turn}
+              root={root}
+              who={it.turn === liveTurn ? engineLabel : 'Claude Code'}
+              live={it.turn === liveTurn ? { parts: agentParts, since: (pending?.at ?? agentSince) + 500, running: agentRunning } : undefined}
+              onOpen={openEditor}
+              onRetry={i === shown.length - 1 && !agentRunning && it.turn.prompt ? () => void send(it.turn.prompt!) : undefined}
+            />
           ),
         )}
-        {agentLines.length > 0 && (agentRunning || !answered) && (
-          <div className="m live">
-            <span className="who">{engineLabel}{agentRunning ? ' · working' : ''}</span>
-            {agentLines.slice(-40).join('\n')}
-          </div>
-        )}
-        {agentRunning && agentLines.length === 0 && <div className="tool dim"><span className="aispin" aria-hidden="true" /> Claude Code is starting…</div>}
         {myTeamRun && <TeamRunCard run={myTeamRun} />}
       </div>
+      {away && (
+        <button className="tolatest" onClick={toEnd}>
+          {agentRunning ? 'Follow the answer ↓' : 'Latest ↓'}
+        </button>
+      )}
 
       <div className="composer">
         {note && <NoteCard note={note} onClose={() => setNote(null)} />}
@@ -324,9 +358,17 @@ export function ChatWidget(): JSX.Element {
               grow();
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 void go();
+              } else if (e.key === 'Escape' && agentRunning) {
+                e.preventDefault();
+                void stopAgent();
+              } else if (e.key === 'ArrowUp' && !text && lastPrompt) {
+                // Up in an empty box brings back the last prompt, to change it and send it again.
+                e.preventDefault();
+                setText(lastPrompt);
+                requestAnimationFrame(grow);
               }
             }}
           />
@@ -374,12 +416,9 @@ export function ChatWidget(): JSX.Element {
                 </div>
               )}
             </div>}
-            <span className="ch static" title="Current git branch">
-              {git?.branch ?? 'no branch'}
-            </span>
             <span className="sp" />
             {agentRunning ? (
-              <button className="send stop" onClick={() => void stopAgent()} title="Stop" aria-label="Stop">
+              <button className="send stop" onClick={() => void stopAgent()} title="Stop (Esc)" aria-label="Stop">
                 <Ico name="stop" />
               </button>
             ) : (
@@ -388,6 +427,10 @@ export function ChatWidget(): JSX.Element {
               </button>
             )}
           </div>
+        </div>
+        <div className="phint" aria-live="polite">
+          <span className="branch" title="Current git branch">{git?.branch ?? 'no branch'}</span>
+          {agentRunning ? (text.trim() ? `${engineLabel} is still working. Stop it (Esc) to send this now, or wait.` : `${engineLabel} is working · Esc to stop`) : 'Enter to send · Shift+Enter for a new line'}
         </div>
       </div>
     </div>

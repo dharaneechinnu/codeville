@@ -53,9 +53,9 @@ def from_claude_hook(p: dict) -> list:
     if name == "SessionEnd":
         return [{**base, "type": "session.end"}]
     if name == "UserPromptSubmit":
-        return [{**base, "type": "prompt", "text": p["prompt"][:2000]}] if p.get("prompt") else []
+        return [{**base, "type": "prompt", "text": p["prompt"][:8000]}] if p.get("prompt") else []
     if name == "Stop":
-        return [{**base, "type": "turn.end", "message": (p.get("last_assistant_message") or "")[:400] or None}]
+        return [{**base, "type": "turn.end", "message": (p.get("last_assistant_message") or "")[:20000] or None}]
     if name == "SubagentStart":
         return [{**base, "type": "agent.start", "agentId": p.get("agent_id") or "subagent", "agentType": p.get("agent_type")}]
     if name == "SubagentStop":

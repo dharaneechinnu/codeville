@@ -54,7 +54,43 @@ def test_with_the_plugin_the_hooks_report_and_the_stream_only_feeds_the_chat():
     feed(t, INIT, delta("Done."), STOP, use("Edit", file_path="/p/a.py"), {"type": "result", "is_error": False, "result": "Done."})
     assert [l for _, l in lines] == ["Done.", "→ Edit /p/a.py"]
     ev = hub.recent(20)
-    assert [e["type"] for e in ev] == ["turn.end"] and ev[0]["message"] is None
+    # the hooks report the tools; this side still carries the whole answer, which the hook cuts short
+    assert [e["type"] for e in ev] == ["turn.end"] and ev[0]["message"] == "Done."
+    agent.forget_session("/p")
+
+
+def test_the_chat_gets_the_words_as_they_are_written_and_tools_as_their_own_lines():
+    hub = EventHub(persist=False)
+    lines = []
+    t = agent.Turn("fix it", "/p", hub, lambda line, stream: lines.append((stream, line)), False, False, live=True)
+    feed(t, INIT, delta("I will"), delta(" fix it.\n"), STOP, use("Edit", file_path="/p/a.py"), {"type": "result", "is_error": False, "result": "Fixed."})
+    assert [(s, l) for s, l in lines if s != "out"] == [("delta", "I will"), ("delta", " fix it.\n"), ("tool", "→ Edit /p/a.py")]
+    assert [l for s, l in lines if s == "out"] == ["I will fix it."]  # the terminal still gets whole lines
+    agent.forget_session("/p")
+
+
+def test_a_long_answer_is_kept_whole():
+    t, hub, _ = turn()
+    answer = "word " * 3000  # 15,000 characters: a plan or a review is often this long
+    feed(t, INIT, {"type": "result", "is_error": False, "result": answer})
+    assert hub.recent(5)[-1]["message"] == answer
+    agent.forget_session("/p")
+
+
+def test_what_claude_code_was_not_allowed_to_do_is_reported():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "I could not run the tests.",
+                   "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    denied = [e for e in hub.recent(10) if e["type"] == "tool"]
+    assert len(denied) == 1 and denied[0]["phase"] == "fail" and denied[0]["tool"] == "Bash" and denied[0]["target"] == "npm test"
+    agent.forget_session("/p")
+
+
+def test_a_failed_turn_says_so():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": True, "result": "Invalid API key · Please run /login"})
+    end = hub.recent(5)[-1]
+    assert end["type"] == "turn.end" and end.get("failed") is True
     agent.forget_session("/p")
 
 

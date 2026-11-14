@@ -33,7 +33,7 @@ export type CvEvent = Base &
     | { type: 'session.start'; cwd: string; agent: string; model?: string }
     | { type: 'session.end' }
     | { type: 'prompt'; text: string }
-    | { type: 'turn.end'; message?: string }
+    | { type: 'turn.end'; message?: string; /** The turn ended in an error instead of an answer. */ failed?: boolean }
     | { type: 'agent.start'; agentId: string; agentType?: string }
     | { type: 'agent.stop'; agentId: string; agentType?: string }
     | { type: 'tool'; tool: string; phase: 'start' | 'end' | 'fail'; target?: string; agentId?: string }

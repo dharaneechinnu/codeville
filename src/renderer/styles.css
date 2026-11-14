@@ -532,3 +532,62 @@ input[type='text'], .pathform input, .tin input { background: #05060d; border: 2
 .teamrole summary { cursor: pointer; font: 11px var(--mono); color: var(--accent); }
 .teamrole details[open] { display: flex; flex-direction: column; gap: 6px; }
 .teamrole textarea { background: #05060d; border: 2px solid var(--line); color: var(--text); font: 12px var(--mono); padding: 6px 8px; resize: vertical; }
+
+/* chat: the conversation as turns, answers written as they arrive */
+.chat { position: relative; }
+.msgs { gap: 14px; padding: 10px; scroll-behavior: auto; }
+.turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.m.user { white-space: pre-wrap; }
+.m.user.waiting { opacity: .75; }
+.m.user .more { display: block; margin-top: 4px; }
+.m.ai { border: none; background: transparent; padding: 0 2px; white-space: normal; display: flex; flex-direction: column; gap: 6px; }
+.m.ai .who { margin-bottom: 0; color: var(--accent); }
+.m.ai.failed { border: 1px solid var(--bad); background: rgba(42,15,22,.6); padding: 8px 10px; }
+.m.ai.failed .who { color: #ff8a98; }
+.mact { display: flex; gap: 6px; opacity: 0; transition: opacity .12s; }
+.m.ai:hover .mact, .m.ai:focus-within .mact, .m.ai.failed .mact { opacity: 1; }
+.mact button, .mdcodebar button { font: 10px var(--mono); background: transparent; border: 1px solid var(--line); color: var(--muted); padding: 1px 7px; text-transform: uppercase; }
+.mact button:hover, .mdcodebar button:hover { border-color: var(--accent); color: var(--text); }
+.tool { align-items: flex-start; }
+.tool i { margin-top: 5px; }
+.tool .steptext { min-width: 0; overflow-wrap: anywhere; }
+.tool.bad { color: #ff8a98; } .tool.bad i { background: var(--bad); }
+.badtxt { color: #ff8a98; font-weight: 400; }
+.steps { border-left: 2px solid var(--line); padding-left: 8px; }
+.steps summary { font: 11px var(--mono); color: var(--muted); cursor: pointer; padding: 2px 0; user-select: none; }
+.steps summary:hover { color: var(--text); }
+.steps[open] summary { margin-bottom: 4px; }
+.steps .tool { margin: 3px 0; }
+.working { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--muted); min-width: 0; }
+.working .aispin { flex: none; }
+.working .worktext { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.working .elapsed { flex: none; color: #5d658f; }
+.tolatest { position: absolute; left: 50%; transform: translateX(-50%); bottom: 132px; z-index: 2; font: 700 11px var(--mono); background: #151a33; border: 1px solid var(--accent); color: var(--text); padding: 4px 12px; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+.phint { font: 10px var(--mono); color: #5d658f; padding: 0 2px; min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* markdown in answers */
+.md { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; min-width: 0; }
+.md p { margin: 0; white-space: pre-line; }
+.md ul, .md ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.md li { white-space: pre-line; }
+.md li > ul, .md li > ol { margin-top: 3px; }
+.md .mdh { font-weight: 700; margin-top: 4px; }
+.md .mdh1 { font-size: 17px; } .md .mdh2 { font-size: 15.5px; } .md .mdh3 { font-size: 14px; }
+.md code { font: 12px var(--mono); background: #171c38; border: 1px solid var(--line); padding: 0 4px; }
+.md a { color: var(--accent); }
+.md hr { border: none; border-top: 1px solid var(--line); width: 100%; margin: 2px 0; }
+.md blockquote { margin: 0; padding-left: 10px; border-left: 2px solid #39427a; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+.mdcode { border: 1px solid var(--line); background: #070914; min-width: 0; }
+.mdcodebar { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 9px; border-bottom: 1px solid var(--line); font: 10px var(--mono); color: var(--muted); text-transform: uppercase; }
+.mdcode pre { margin: 0; padding: 8px 10px; overflow-x: auto; }
+.mdcode pre code { font: 12px/1.5 var(--mono); background: none; border: none; padding: 0; white-space: pre; }
+.mdtable { overflow-x: auto; }
+.mdtable table { border-collapse: collapse; font-size: 12.5px; }
+.mdtable th, .mdtable td { border: 1px solid var(--line); padding: 3px 8px; text-align: left; vertical-align: top; }
+.mdtable th { background: #151a33; }
+.pbar { min-width: 0; }
+.pbar > .menuwrap, .pbar > .ch.team, .pbar > .send { flex: none; }
+.pbar > .ch.static { flex: 0 1 auto; min-width: 0; }
+.pbar > .menuwrap .ch { max-width: 110px; }
+.tool.bad b { font-weight: 700; }
+.phint .branch { float: right; margin-left: 8px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }

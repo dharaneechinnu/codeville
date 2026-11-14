@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Analysis } from '../shared/types.js';
 import type { CvEvent, Problem } from '../shared/events.js';
-import { api, bridge, useEventStream, type OutputLine } from './api.js';
+import { api, bridge, useEventStream, type LivePart, type OutputLine } from './api.js';
 import type { Town } from './town.js';
 
 export interface ChangedFile {
@@ -66,8 +66,13 @@ interface Ctx {
   run: (command: string, cwd?: string) => Promise<void>;
   /** Sends a prompt to an AI engine. Claude Code continues the project's conversation unless `fresh` starts a new one or `sessionId` names another. */
   sendPrompt: (prompt: string, model: string, opts?: { fresh?: boolean; sessionId?: string; engine?: string }) => Promise<boolean>;
-  agentLines: string[];
+  /** What the agent has said and done in the prompt that is running, or that ran last. */
+  agentParts: LivePart[];
   agentRunning: boolean;
+  /** When the last prompt was sent. */
+  agentSince: number;
+  /** A prompt that was sent and has not come back from the agent yet. The chat shows it at once. */
+  pending: { text: string; at: number } | null;
   /** Asks the connected agent to read the code and write the project map; the town rebuilds when it has. */
   askMap: () => Promise<void>;
   /** Forgets the agent's map and goes back to what the file names say. */
@@ -120,8 +125,10 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [agentRun, setAgentRun] = useState<string | null>(null);
   const [agentSince, setAgentSince] = useState(0);
+  const [pending, setPending] = useState<{ text: string; at: number } | null>(null);
+  const [sending, setSending] = useState(false);
 
-  const { events, output, connected } = useEventStream(useCallback((e: CvEvent) => townRef.current?.handleEvent(e), []));
+  const { events, output, live, connected } = useEventStream(useCallback((e: CvEvent) => townRef.current?.handleEvent(e), []));
 
   const openProject = useCallback(async (path: string) => {
     setError('');
@@ -230,14 +237,21 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
       if (!root) return false;
       try {
         const sentAt = Date.now() - 500;
+        setPending({ text: prompt, at: sentAt });
+        // From this moment it is working: starting the agent takes a few seconds, and the chat says so.
+        setAgentRun(null);
+        setSending(true);
         const r = await api<{ runId: string }>('/api/agent/send', { path: root, prompt, model, fresh: opts?.fresh ?? false, sessionId: opts?.sessionId ?? '', engine: opts?.engine ?? 'claude' });
         setAgentSince(sentAt);
         setAgentRun(r.runId);
         return true;
       } catch (err) {
+        setPending(null);
         const p = problemOf(err);
         setNote({ kind: 'err', title: p?.what ?? 'Could not send that', broke: p?.why.join('. '), next: p?.next ?? (err instanceof Error ? err.message : undefined) });
         return false;
+      } finally {
+        setSending(false);
       }
     },
     [root],
@@ -276,8 +290,9 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
     if (agentRun) await api('/api/stop', { runId: agentRun }).catch(() => undefined);
   }, [agentRun]);
 
-  const agentLines = useMemo(() => (agentRun ? output.filter((o) => o.runId === agentRun).map((o) => o.line) : []), [output, agentRun]);
+  const agentParts = useMemo(() => (agentRun ? (live[agentRun] ?? []) : []), [live, agentRun]);
   const agentRunning = useMemo(() => {
+    if (sending) return true;
     if (!agentRun) return false;
     // Only an ending that came after this prompt was sent counts; earlier turns ended too.
     for (let i = events.length - 1; i >= 0; i--) {
@@ -286,7 +301,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
       if (e?.type === 'turn.end' && e.source === 'app') return false;
     }
     return true;
-  }, [events, agentRun, agentSince]);
+  }, [events, agentRun, agentSince, sending]);
 
   const select = useCallback((path: string | null) => {
     setSelected(path);
@@ -303,7 +318,7 @@ export function CvProvider({ children }: { children: ReactNode }): JSX.Element {
   const value: Ctx = {
     root, analysis, events, output, connected, busy, error, git, gitError, note, setNote, selected, select, editorFile, openEditor, editorAsk, editorDocked, setEditorDocked,
     terminalOpen, editorOpen, setTerminalOpen, setEditorOpen, townRef, openProject, chooseFolder, recent, refreshGit, gitAct, run,
-    sendPrompt, agentLines, agentRunning, stopAgent, askMap, clearMap, mapping,
+    sendPrompt, agentParts, agentRunning, agentSince, pending, stopAgent, askMap, clearMap, mapping,
   };
   return <CvContext.Provider value={value}>{children}</CvContext.Provider>;
 }

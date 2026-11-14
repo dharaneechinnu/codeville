@@ -13,7 +13,7 @@ block per file), a walking shopper that runs your tests, and short messages that
 
 | Widget | What it does |
 |---|---|
-| Chat | Type a prompt and send it to Claude Code. Shows what the agent did: edits, tools, sub-agents. |
+| Chat | Type a prompt and send it to Claude Code or another AI engine. Your prompt shows at once, the answer is written as it arrives (headings, lists, tables, code blocks with Copy), and each turn lists what the agent did. Esc stops, ↑ brings back your last prompt, and a failed turn has Try again. |
 | Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Flow**: the kind of app this is and its user flow, step by step, with the files behind each step. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
 | Files | The project by feature or by folder, with git badges. |
 | Source control | Stage, commit, commit and push, push. Failures say what broke and the next step. |

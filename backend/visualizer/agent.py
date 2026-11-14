@@ -40,6 +40,9 @@ SAFE_TOOLS = (
 ALLOWED_TOOLS = [f"mcp__{server}__{tool}" for server in (MCP_NAME, f"plugin_code-visualizer_{MCP_NAME}") for tool in SAFE_TOOLS]
 NOT_SIGNED_IN = re.compile(r"(invalid api key|please run /login|not logged in|authentication_error|oauth token has expired)", re.I)
 NO_SESSION = re.compile(r"no conversation found", re.I)
+# How much of a prompt and of an answer is kept in the conversation. Long answers are common: a plan, a review, a file.
+PROMPT_KEPT = 8000
+ANSWER_KEPT = 20000
 SIGN_IN_HELP = "Claude Code is not signed in. Open a terminal, run `claude`, sign in, then send your message again."
 
 
@@ -133,8 +136,12 @@ def _target(inp: dict) -> str:
 class Turn:
     """Reads one turn of Claude Code's stream and turns it into what the app shows: lines for the chat and events."""
 
-    def __init__(self, prompt: str, cwd: str, hub: EventHub, emit: Callable[[str, str], None], hooked: bool, resumed: bool):
+    def __init__(self, prompt: str, cwd: str, hub: EventHub, emit: Callable[[str, str], None], hooked: bool, resumed: bool,
+                 live: bool = False):
         self.prompt, self.cwd, self.hub, self.emit, self.hooked, self.resumed = prompt, cwd, hub, emit, hooked, resumed
+        # The chat shows the answer as it is written: the words go out as they arrive ("delta"), and each tool as its
+        # own kind of line ("tool"). Whole lines still go out as before, for the terminal.
+        self.live = live
         self.session: Optional[str] = None
         self.buf = ""
         self.done = False
@@ -177,12 +184,14 @@ class Turn:
             if not self.hooked:
                 if not self.resumed:
                     self._push({"type": "session.start", "source": "agent", "cwd": self.cwd, "agent": "Claude Code", "model": d.get("model")})
-                self._push({"type": "prompt", "source": "agent", "text": self.prompt[:2000]})
+                self._push({"type": "prompt", "source": "agent", "text": self.prompt[:PROMPT_KEPT]})
         elif kind == "stream_event":
             ev = d.get("event") or {}
             delta = ev.get("delta") or {}
             if ev.get("type") == "content_block_delta" and delta.get("type") == "text_delta":
                 self.buf += delta.get("text") or ""
+                if self.live and delta.get("text"):
+                    self.emit(delta["text"], "delta")
                 self._flush()
             elif ev.get("type") == "content_block_stop":
                 self._flush(True)
@@ -194,7 +203,7 @@ class Turn:
                 inp = block.get("input") if isinstance(block.get("input"), dict) else {}
                 target = _target(inp)
                 self._flush(True)
-                self.emit(f"→ {name.replace('mcp__', '').replace('__', ': ')} {target}".rstrip(), "out")
+                self.emit(f"→ {name.replace('mcp__', '').replace('__', ': ')} {target}".rstrip(), "tool" if self.live else "out")
                 if self.hooked:
                     continue  # the plugin's hooks report tools and file changes
                 self._push({"type": "tool", "source": "agent", "tool": name, "phase": "start", "target": target or None})
@@ -206,6 +215,12 @@ class Turn:
             text = str(d.get("result") or "")
             if d.get("is_error") and NOT_SIGNED_IN.search(text):
                 text = SIGN_IN_HELP
+            # Something Claude Code wanted to do and was not allowed to. Without this the user only sees it give up.
+            for denial in d.get("permission_denials") or []:
+                if not isinstance(denial, dict):
+                    continue
+                inp = denial.get("tool_input") if isinstance(denial.get("tool_input"), dict) else {}
+                self._push({"type": "tool", "source": "agent", "tool": str(denial.get("tool_name") or "tool"), "phase": "fail", "target": _target(inp) or None})
             self.finish(text, bool(d.get("is_error")))
 
     def finish(self, text: str, failed: bool = False) -> None:
@@ -214,9 +229,8 @@ class Turn:
         self.done = True
         if failed and text:
             self.emit(text, "err")
-        # With the plugin, its Stop hook already reports Claude's last words; this event only says the turn is over.
-        message = None if (self.hooked and not failed) else (text[:4000] or None)
-        self._push({"type": "turn.end", "source": "app", "message": message})
+        # The whole answer, also with the plugin: its Stop hook reports the last words too, and the chat shows one of them.
+        self._push({"type": "turn.end", "source": "app", "message": text[:ANSWER_KEPT] or None, **({"failed": True} if failed else {})})
 
 
 def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = None,
@@ -249,7 +263,7 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
     run_id = new_id("agent")
     with _lock:
         _runs[run_id] = AgentRun(run_id, proc)
-    turn = Turn(prompt, cwd, hub, lambda line, stream: on_output(line, stream, run_id) if on_output else None, hooked, bool(resume))
+    turn = Turn(prompt, cwd, hub, lambda line, stream: on_output(line, stream, run_id) if on_output else None, hooked, bool(resume), live=True)
     turn.session = resume
 
     def pump(stream, name: str) -> None:
@@ -301,7 +315,7 @@ def _send_plain(engine: str, prompt: str, cwd: str, hub: EventHub, model: Option
     run_id = new_id("agent")
     with _lock:
         _runs[run_id] = AgentRun(run_id, proc)
-    hub.push({"type": "prompt", "source": "app", "text": prompt[:2000]})
+    hub.push({"type": "prompt", "source": "app", "text": prompt[:PROMPT_KEPT]})
     said: dict = {"out": [], "err": []}  # the last lines it printed, to explain a failure
     answer: list = []  # what it wrote on standard output: that is its reply
 
@@ -338,8 +352,8 @@ def _send_plain(engine: str, prompt: str, cwd: str, hub: EventHub, model: Option
             tell(failed, "err")
             answer.append(failed)
         # Like Claude Code's last words, the reply becomes a message in the conversation.
-        text = "\n".join(answer)[-4000:] or ("Stopped." if proc.returncode else f"{label} finished and printed nothing.")
-        hub.push({"type": "turn.end", "source": "app", "message": text})
+        text = "\n".join(answer)[-ANSWER_KEPT:] or ("Stopped." if proc.returncode else f"{label} finished and printed nothing.")
+        hub.push({"type": "turn.end", "source": "app", "message": text, **({"failed": True} if (proc.returncode or 0) > 0 else {})})
 
     threading.Thread(target=watch, daemon=True).start()
     return run_id
