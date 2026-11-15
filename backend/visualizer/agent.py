@@ -40,6 +40,9 @@ SAFE_TOOLS = (
 ALLOWED_TOOLS = [f"mcp__{server}__{tool}" for server in (MCP_NAME, f"plugin_code-visualizer_{MCP_NAME}") for tool in SAFE_TOOLS]
 NOT_SIGNED_IN = re.compile(r"(invalid api key|please run /login|not logged in|authentication_error|oauth token has expired)", re.I)
 NO_SESSION = re.compile(r"no conversation found", re.I)
+# How much of a prompt and of an answer is kept in the conversation. Long answers are common: a plan, a review, a file.
+PROMPT_KEPT = 8000
+ANSWER_KEPT = 20000
 SIGN_IN_HELP = "Claude Code is not signed in. Open a terminal, run `claude`, sign in, then send your message again."
 
 
@@ -59,6 +62,34 @@ _runs: dict = {}
 _sessions: dict = {}  # project folder -> the Claude Code session to continue
 _lock = threading.Lock()
 _plugin: dict = {"at": 0.0, "installed": False}
+# project folder -> {"session": the conversation it happened in, "items": what Claude Code was not allowed to do}
+_denied: dict = {}
+MAX_ALLOWED = 10
+
+
+def denied_for(cwd: str) -> list:
+    with _lock:
+        return list((_denied.get(_key(cwd)) or {}).get("items", []))
+
+
+def allow_rules(denials: list) -> list:
+    """Permission rules for exactly what was refused: the same command, word for word, and nothing wider. Another
+    tool (a web page, for example) is allowed by its name, since it has no command to pin down."""
+    rules: list = []
+    for d in denials:
+        tool, inp = str(d.get("tool") or ""), d.get("input") if isinstance(d.get("input"), dict) else {}
+        command = inp.get("command")
+        if tool == "Bash":
+            if not isinstance(command, str) or not command.strip() or "\n" in command:
+                continue  # a command over several lines cannot be named exactly; it stays blocked
+            rule = f"Bash({command.strip()})"
+        elif re.fullmatch(r"[A-Za-z][\w-]*", tool):
+            rule = tool
+        else:
+            continue
+        if rule not in rules:
+            rules.append(rule)
+    return rules[:MAX_ALLOWED]
 
 
 def claude_path() -> Optional[str]:
@@ -105,7 +136,8 @@ def mcp_config() -> Optional[str]:
     return str(target)
 
 
-def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optional[str], hooked: bool) -> list:
+def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optional[str], hooked: bool,
+               also_allow: Optional[list] = None) -> list:
     """The prompt itself goes in on standard input, so long prompts with new lines survive every shell."""
     args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
     if resume:
@@ -118,7 +150,8 @@ def build_args(exe: str, model: Optional[str], accept_edits: bool, resume: Optio
         cfg = mcp_config()
         if cfg:
             args += ["--mcp-config", cfg]
-    args += ["--allowedTools", ",".join(ALLOWED_TOOLS)]
+    # What the user allowed for this one prompt goes in as its own values, so a comma in a command stays in it.
+    args += ["--allowedTools", ",".join(ALLOWED_TOOLS), *(also_allow or [])]
     return args
 
 
@@ -133,12 +166,19 @@ def _target(inp: dict) -> str:
 class Turn:
     """Reads one turn of Claude Code's stream and turns it into what the app shows: lines for the chat and events."""
 
-    def __init__(self, prompt: str, cwd: str, hub: EventHub, emit: Callable[[str, str], None], hooked: bool, resumed: bool):
+    def __init__(self, prompt: str, cwd: str, hub: EventHub, emit: Callable[[str, str], None], hooked: bool, resumed: bool,
+                 live: bool = False):
         self.prompt, self.cwd, self.hub, self.emit, self.hooked, self.resumed = prompt, cwd, hub, emit, hooked, resumed
+        # The chat shows the answer as it is written: the words go out as they arrive ("delta"), and each tool as its
+        # own kind of line ("tool"). Whole lines still go out as before, for the terminal.
+        self.live = live
         self.session: Optional[str] = None
         self.buf = ""
         self.done = False
         self.failed = ""
+        # How full the conversation's memory is after this turn, and what the turn cost. Shown as a ring in the chat.
+        self.context = 0
+        self.usage: Optional[dict] = None
 
     def _push(self, event: dict) -> None:
         self.hub.push({**event, **({"sessionId": self.session} if self.session else {})})
@@ -177,16 +217,24 @@ class Turn:
             if not self.hooked:
                 if not self.resumed:
                     self._push({"type": "session.start", "source": "agent", "cwd": self.cwd, "agent": "Claude Code", "model": d.get("model")})
-                self._push({"type": "prompt", "source": "agent", "text": self.prompt[:2000]})
+                self._push({"type": "prompt", "source": "agent", "text": self.prompt[:PROMPT_KEPT]})
         elif kind == "stream_event":
             ev = d.get("event") or {}
             delta = ev.get("delta") or {}
             if ev.get("type") == "content_block_delta" and delta.get("type") == "text_delta":
                 self.buf += delta.get("text") or ""
+                if self.live and delta.get("text"):
+                    self.emit(delta["text"], "delta")
                 self._flush()
             elif ev.get("type") == "content_block_stop":
                 self._flush(True)
         elif kind == "assistant":
+            # What the model was sent for this step is what the conversation now holds; the last step counts.
+            u = (d.get("message") or {}).get("usage")
+            if isinstance(u, dict):
+                sent = sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+                if sent:
+                    self.context = sent + int(u.get("output_tokens") or 0)
             for block in (d.get("message") or {}).get("content") or []:
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
                     continue
@@ -194,7 +242,7 @@ class Turn:
                 inp = block.get("input") if isinstance(block.get("input"), dict) else {}
                 target = _target(inp)
                 self._flush(True)
-                self.emit(f"→ {name.replace('mcp__', '').replace('__', ': ')} {target}".rstrip(), "out")
+                self.emit(f"→ {name.replace('mcp__', '').replace('__', ': ')} {target}".rstrip(), "tool" if self.live else "out")
                 if self.hooked:
                     continue  # the plugin's hooks report tools and file changes
                 self._push({"type": "tool", "source": "agent", "tool": name, "phase": "start", "target": target or None})
@@ -206,6 +254,24 @@ class Turn:
             text = str(d.get("result") or "")
             if d.get("is_error") and NOT_SIGNED_IN.search(text):
                 text = SIGN_IN_HELP
+            # Something Claude Code wanted to do and was not allowed to. Without this the user only sees it give up.
+            models = d.get("modelUsage") if isinstance(d.get("modelUsage"), dict) else {}
+            window = max([int(m.get("contextWindow") or 0) for m in models.values() if isinstance(m, dict)] or [0])
+            total = d.get("usage") if isinstance(d.get("usage"), dict) else {}
+            if self.context and window:
+                cost = d.get("total_cost_usd")
+                self.usage = {"used": self.context, "window": window, "out": int(total.get("output_tokens") or 0),
+                              "cost": round(float(cost), 4) if isinstance(cost, (int, float)) else None}
+            refused = []
+            for denial in d.get("permission_denials") or []:
+                if not isinstance(denial, dict):
+                    continue
+                inp = denial.get("tool_input") if isinstance(denial.get("tool_input"), dict) else {}
+                refused.append({"tool": str(denial.get("tool_name") or ""), "input": inp})
+                self._push({"type": "tool", "source": "agent", "tool": str(denial.get("tool_name") or "tool"), "phase": "fail", "target": _target(inp) or None})
+            # Kept so the user can allow exactly these and let Claude Code go on.
+            with _lock:
+                _denied[_key(self.cwd)] = {"session": self.session, "items": refused}
             self.finish(text, bool(d.get("is_error")))
 
     def finish(self, text: str, failed: bool = False) -> None:
@@ -214,14 +280,15 @@ class Turn:
         self.done = True
         if failed and text:
             self.emit(text, "err")
-        # With the plugin, its Stop hook already reports Claude's last words; this event only says the turn is over.
-        message = None if (self.hooked and not failed) else (text[:4000] or None)
-        self._push({"type": "turn.end", "source": "app", "message": message})
+        # The whole answer, also with the plugin: its Stop hook reports the last words too, and the chat shows one of them.
+        self._push({"type": "turn.end", "source": "app", "message": text[:ANSWER_KEPT] or None, **({"failed": True} if failed else {}),
+                    **({"usage": self.usage} if self.usage else {})})
 
 
 def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = None,
                 on_output: Optional[Callable[[str, str, str], None]] = None, accept_edits: bool = True,
-                session_id: Optional[str] = None, fresh: bool = False, engine: str = "claude") -> str:
+                session_id: Optional[str] = None, fresh: bool = False, engine: str = "claude",
+                allow_denied: bool = False) -> str:
     """Sends one prompt. With Claude Code it continues the project's conversation unless `fresh` asks for a new one or
     `session_id` names another one to continue. Any other engine gets the prompt on its own."""
     if engine != "claude":
@@ -234,11 +301,22 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
         ))
     if fresh:
         forget_session(cwd)
+    # The user may allow what the last turn was refused. It holds for this one prompt and for those exact commands.
     resume = None if fresh else (session_id or session_for(cwd))
+    with _lock:
+        last = _denied.pop(_key(cwd), None) or {}
+    # Only in the conversation where it was refused: allowing in one conversation must never let another one run it.
+    same = bool(resume) and last.get("session") == resume
+    also_allow = allow_rules(last.get("items", [])) if allow_denied and same else []
+    if allow_denied and not also_allow:
+        raise AgentProblem(problem(
+            "There is nothing to allow any more", ["Codeville was restarted, or another prompt or conversation came in between"],
+            "Send your request again. If Claude Code is stopped again, allow it then.",
+        ))
     hooked = plugin_installed()
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     proc = subprocess.Popen(
-        build_args(exe, model, accept_edits, resume, hooked), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        build_args(exe, model, accept_edits, resume, hooked, also_allow), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         stdin=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", creationflags=flags,
     )
     try:
@@ -249,7 +327,7 @@ def send_prompt(prompt: str, cwd: str, hub: EventHub, model: Optional[str] = Non
     run_id = new_id("agent")
     with _lock:
         _runs[run_id] = AgentRun(run_id, proc)
-    turn = Turn(prompt, cwd, hub, lambda line, stream: on_output(line, stream, run_id) if on_output else None, hooked, bool(resume))
+    turn = Turn(prompt, cwd, hub, lambda line, stream: on_output(line, stream, run_id) if on_output else None, hooked, bool(resume), live=True)
     turn.session = resume
 
     def pump(stream, name: str) -> None:
@@ -301,7 +379,7 @@ def _send_plain(engine: str, prompt: str, cwd: str, hub: EventHub, model: Option
     run_id = new_id("agent")
     with _lock:
         _runs[run_id] = AgentRun(run_id, proc)
-    hub.push({"type": "prompt", "source": "app", "text": prompt[:2000]})
+    hub.push({"type": "prompt", "source": "app", "text": prompt[:PROMPT_KEPT]})
     said: dict = {"out": [], "err": []}  # the last lines it printed, to explain a failure
     answer: list = []  # what it wrote on standard output: that is its reply
 
@@ -338,8 +416,8 @@ def _send_plain(engine: str, prompt: str, cwd: str, hub: EventHub, model: Option
             tell(failed, "err")
             answer.append(failed)
         # Like Claude Code's last words, the reply becomes a message in the conversation.
-        text = "\n".join(answer)[-4000:] or ("Stopped." if proc.returncode else f"{label} finished and printed nothing.")
-        hub.push({"type": "turn.end", "source": "app", "message": text})
+        text = "\n".join(answer)[-ANSWER_KEPT:] or ("Stopped." if proc.returncode else f"{label} finished and printed nothing.")
+        hub.push({"type": "turn.end", "source": "app", "message": text, **({"failed": True} if (proc.returncode or 0) > 0 else {})})
 
     threading.Thread(target=watch, daemon=True).start()
     return run_id

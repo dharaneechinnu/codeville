@@ -54,7 +54,43 @@ def test_with_the_plugin_the_hooks_report_and_the_stream_only_feeds_the_chat():
     feed(t, INIT, delta("Done."), STOP, use("Edit", file_path="/p/a.py"), {"type": "result", "is_error": False, "result": "Done."})
     assert [l for _, l in lines] == ["Done.", "→ Edit /p/a.py"]
     ev = hub.recent(20)
-    assert [e["type"] for e in ev] == ["turn.end"] and ev[0]["message"] is None
+    # the hooks report the tools; this side still carries the whole answer, which the hook cuts short
+    assert [e["type"] for e in ev] == ["turn.end"] and ev[0]["message"] == "Done."
+    agent.forget_session("/p")
+
+
+def test_the_chat_gets_the_words_as_they_are_written_and_tools_as_their_own_lines():
+    hub = EventHub(persist=False)
+    lines = []
+    t = agent.Turn("fix it", "/p", hub, lambda line, stream: lines.append((stream, line)), False, False, live=True)
+    feed(t, INIT, delta("I will"), delta(" fix it.\n"), STOP, use("Edit", file_path="/p/a.py"), {"type": "result", "is_error": False, "result": "Fixed."})
+    assert [(s, l) for s, l in lines if s != "out"] == [("delta", "I will"), ("delta", " fix it.\n"), ("tool", "→ Edit /p/a.py")]
+    assert [l for s, l in lines if s == "out"] == ["I will fix it."]  # the terminal still gets whole lines
+    agent.forget_session("/p")
+
+
+def test_a_long_answer_is_kept_whole():
+    t, hub, _ = turn()
+    answer = "word " * 3000  # 15,000 characters: a plan or a review is often this long
+    feed(t, INIT, {"type": "result", "is_error": False, "result": answer})
+    assert hub.recent(5)[-1]["message"] == answer
+    agent.forget_session("/p")
+
+
+def test_what_claude_code_was_not_allowed_to_do_is_reported():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "I could not run the tests.",
+                   "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    denied = [e for e in hub.recent(10) if e["type"] == "tool"]
+    assert len(denied) == 1 and denied[0]["phase"] == "fail" and denied[0]["tool"] == "Bash" and denied[0]["target"] == "npm test"
+    agent.forget_session("/p")
+
+
+def test_a_failed_turn_says_so():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": True, "result": "Invalid API key · Please run /login"})
+    end = hub.recent(5)[-1]
+    assert end["type"] == "turn.end" and end.get("failed") is True
     agent.forget_session("/p")
 
 
@@ -111,3 +147,95 @@ def test_claude_code_may_not_run_commands_through_codeville_without_asking():
     listed = allowed[allowed.index("--allowedTools") + 1].split(",")
     assert "mcp__codeville__git_status" in listed and "mcp__plugin_code-visualizer_codeville__save_project_map" in listed
     assert not any(t.endswith("run_check") or t in ("mcp__codeville", "mcp__plugin_code-visualizer_codeville") for t in listed)
+
+
+def test_the_user_can_allow_exactly_what_was_refused_and_nothing_wider(monkeypatch, tmp_path):
+    t, hub, _ = turn(cwd=str(tmp_path))
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [
+        {"tool_name": "Bash", "tool_input": {"command": "npm test -- --watch=false, please"}},
+        {"tool_name": "Bash", "tool_input": {"command": "echo a\nrm -rf x"}},  # several lines: cannot be named exactly
+        {"tool_name": "WebFetch", "tool_input": {"url": "https://example.com"}},
+        {"tool_name": "Bash(rm -rf /)", "tool_input": {}},  # not a tool name
+    ]})
+    assert agent.allow_rules(agent.denied_for(str(tmp_path))) == ["Bash(npm test -- --watch=false, please)", "WebFetch"]
+
+    started = {}
+
+    class Proc:
+        stdin = stdout = stderr = None
+        returncode = 0
+
+    def popen(args, **kw):
+        started["args"] = args
+        raise OSError("stop here")
+
+    monkeypatch.setattr(agent, "claude_path", lambda: "claude")
+    monkeypatch.setattr(agent, "plugin_installed", lambda: True)
+    monkeypatch.setattr(agent.subprocess, "Popen", popen)
+    try:
+        agent.send_prompt("go on", str(tmp_path), hub, allow_denied=True)
+    except OSError:
+        pass
+    at = started["args"].index("--allowedTools")
+    # each allowed command is its own value, so the comma inside it does not split it
+    assert started["args"][at + 2:] == ["Bash(npm test -- --watch=false, please)", "WebFetch"]
+    # it held for that one prompt: asking again finds nothing to allow
+    try:
+        agent.send_prompt("again", str(tmp_path), hub, allow_denied=True)
+        assert False, "expected a problem"
+    except agent.AgentProblem as err:
+        assert err.problem["what"] == "There is nothing to allow any more"
+    agent.forget_session(str(tmp_path))
+
+
+def test_a_normal_prompt_never_carries_extra_permissions(tmp_path):
+    t, hub, _ = turn(cwd=str(tmp_path))
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    args = agent.build_args("claude", None, True, None, True)
+    assert args[args.index("--allowedTools") + 2:] == []
+    agent.forget_session(str(tmp_path))
+
+
+def test_a_turn_reports_how_full_the_conversation_is_and_what_it_cost():
+    t, hub, _ = turn()
+
+    def step(sent, out):
+        return {"type": "assistant", "message": {"content": [], "usage": {"input_tokens": 2, "cache_read_input_tokens": sent, "cache_creation_input_tokens": 0, "output_tokens": out}}}
+
+    feed(t, INIT, step(30000, 50), step(41000, 120),
+         {"type": "result", "is_error": False, "result": "ok", "total_cost_usd": 0.20526, "usage": {"output_tokens": 170},
+          "modelUsage": {"claude-x": {"contextWindow": 200000}}})
+    usage = hub.recent(5)[-1]["usage"]
+    # the last step is what the conversation holds now; earlier steps are not added on top
+    assert usage == {"used": 41122, "window": 200000, "out": 170, "cost": 0.2053}
+    agent.forget_session("/p")
+
+
+def test_a_turn_without_usage_numbers_reports_none():
+    t, hub, _ = turn()
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "ok"})
+    assert "usage" not in hub.recent(5)[-1]
+    agent.forget_session("/p")
+
+
+def test_allowing_only_works_in_the_conversation_that_was_refused(monkeypatch, tmp_path):
+    cwd = str(tmp_path)
+    t, hub, _ = turn(cwd=cwd)  # this turn runs in session s-1
+    feed(t, INIT, {"type": "result", "is_error": False, "result": "blocked", "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": "npm test"}}]})
+    started = []
+    monkeypatch.setattr(agent, "claude_path", lambda: "claude")
+    monkeypatch.setattr(agent, "plugin_installed", lambda: True)
+
+    def popen(args, **kw):
+        started.append(args)
+        raise OSError("stop here")
+
+    monkeypatch.setattr(agent.subprocess, "Popen", popen)
+    # another conversation asks to allow: it gets nothing, and nothing is started
+    try:
+        agent.send_prompt("go on", cwd, hub, session_id="s-other", allow_denied=True)
+        assert False, "expected a problem"
+    except agent.AgentProblem as err:
+        assert err.problem["what"] == "There is nothing to allow any more"
+    assert started == []
+    agent.forget_session(cwd)

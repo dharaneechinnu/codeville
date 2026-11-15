@@ -87,6 +87,8 @@ class AgentSerializer(FolderSerializer):
     fresh = serializers.BooleanField(default=False)
     # Which AI engine gets the prompt; empty means Claude Code.
     engine = serializers.CharField(required=False, allow_blank=True, default="", max_length=40)
+    # Let Claude Code run exactly what it was refused in its last turn, for this prompt only.
+    allowDenied = serializers.BooleanField(default=False)
 
 
 class EngineSerializer(serializers.Serializer):

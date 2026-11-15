@@ -7,6 +7,7 @@ import json
 import os
 import re
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -255,13 +256,19 @@ def classify_layers(files: list, stack: dict) -> dict:
 # ---------------------------------------------------------------------------------------------- find_features
 
 def _tokens(path: str) -> list:
+    return list(_tokens_of(path))
+
+
+@lru_cache(maxsize=50_000)
+def _tokens_of(path: str) -> tuple:
+    """The words in a path. The same paths are asked for many times in one analysis, so the answer is remembered."""
     parts = path.split("/")
     stem = re.sub(r"\.[^.]+$", "", parts.pop() if parts else "")
     out: list = []
     for seg in [*parts, stem]:
         spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", seg).lower()
         out.extend(t for t in re.split(r"[^a-z0-9]+", spaced) if t)
-    return out
+    return tuple(out)
 
 
 def _singular(t: str) -> str:

@@ -163,6 +163,7 @@ export class TestStage {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
+    if (document.hidden || this.host.clientWidth === 0) return;
     const t = (performance.now() - this.t0) / 1000;
     const dz = this.zTarget - this.zNow;
     const moving = Math.abs(dz) > 0.05;

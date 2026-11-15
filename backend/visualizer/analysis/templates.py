@@ -10,6 +10,7 @@ Templates are written by hand, here. To teach the app a new kind of project, add
 from __future__ import annotations
 
 from collections import Counter
+from functools import lru_cache
 
 from .steps import _singular, _tokens
 
@@ -106,11 +107,19 @@ GENERAL_STEPS = [
 ]
 
 
-def _hits(path: str, words: set) -> int:
-    """How strongly a file's path names a step. The file's own name counts more than the folders above it."""
-    tokens = [_singular(t) for t in _tokens(path)]
+@lru_cache(maxsize=50_000)
+def _named(path: str) -> tuple:
+    """A path's words, and where the file's own name starts among them. Every template step asks for the same path,
+    so this is worked out once per file instead of once per file and step."""
+    tokens = tuple(_singular(t) for t in _tokens(path))
     folders = len(path.split("/")) - 1
     stem_from = len([t for seg in path.split("/")[:folders] for t in _tokens(seg + "/x")[:-1]])
+    return tokens, stem_from
+
+
+def _hits(path: str, words: set) -> int:
+    """How strongly a file's path names a step. The file's own name counts more than the folders above it."""
+    tokens, stem_from = _named(path)
     score = 0
     for i, t in enumerate(tokens):
         if t in words:

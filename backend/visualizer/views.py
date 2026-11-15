@@ -348,7 +348,7 @@ class AgentSendView(APIView):
         try:
             run_id = agent.send_prompt(
                 d["prompt"], d["path"], hub, model=d["model"] or None, accept_edits=d["acceptEdits"],
-                session_id=d["sessionId"] or None, fresh=d["fresh"], engine=d["engine"] or "claude",
+                session_id=d["sessionId"] or None, fresh=d["fresh"], engine=d["engine"] or "claude", allow_denied=d["allowDenied"],
                 on_output=lambda line, stream, rid: hub.output({"runId": rid, "line": line, "stream": stream}),
             )
         except agent.AgentProblem as err:

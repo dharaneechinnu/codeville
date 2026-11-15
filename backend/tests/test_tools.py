@@ -90,3 +90,37 @@ def test_run_check_only_runs_the_projects_own_commands(auth, shop):
     r = call(auth, "run_check", {"kind": "test", "path": str(shop), "command": "pytest; rm -rf ~"})
     assert r.status_code == 400 and "Only the project's own test commands can run here: `npm test`" in r.json()["error"]
     assert call(auth, "run_check", {"kind": "test", "path": str(shop), "command": "npm test"}).json()["command"] == "npm test"
+
+
+def test_a_project_with_no_test_command_reports_tests_that_did_not_run(tmp_path):
+    from visualizer import tools
+    from visualizer.hub import EventHub
+
+    hub = EventHub(persist=False)
+    (tmp_path / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    try:
+        tools.run_check({"kind": "test", "path": str(tmp_path)}, hub)
+        assert False, "expected the tool to refuse"
+    except tools.ToolError as err:
+        assert "could not find a test command" in str(err)
+    end = [e for e in hub.recent(10) if e["type"] == "run.end"]
+    assert len(end) == 1 and end[0]["status"] == "fail" and end[0]["problem"]["what"] == "The tests did not run"
+
+
+def test_a_wrong_command_in_a_project_that_has_tests_is_not_reported_as_no_tests(tmp_path, monkeypatch):
+    from visualizer import tools
+    from visualizer.hub import EventHub
+
+    hub = EventHub(persist=False)
+    (tmp_path / "pytest.ini").write_text("[pytest]\n")
+
+    def refuse(kind, root, command):
+        raise tools.ToolError("That is not one of this project's commands.")
+
+    monkeypatch.setattr(tools, "project_command", refuse)
+    try:
+        tools.run_check({"kind": "test", "path": str(tmp_path), "command": "rm -rf x"}, hub)
+        assert False, "expected the tool to refuse"
+    except tools.ToolError:
+        pass
+    assert [e for e in hub.recent(10) if e["type"] == "run.end"] == []

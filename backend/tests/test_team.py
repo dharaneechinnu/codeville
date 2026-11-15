@@ -308,6 +308,32 @@ def test_checks_that_could_not_run_are_never_shown_as_passed(auth, project, monk
     assert "## Checks that could not run" in run.summary and "cannot install packages" in run.summary
 
 
+def test_tests_that_cannot_run_do_not_send_the_developer_back(auth, project, monkeypatch):
+    """A missing package is not failing code. The Developer is not called again, and the run ends as not tested."""
+    def tester(root, p):
+        hub.push({"type": "run.end", "source": "terminal", "runId": "r2", "kind": "test", "status": "fail", "passed": 0, "failed": 0, "skipped": 0, "ms": 5,
+                  "problem": {"what": "The tests did not run", "why": ["No module named pytest"], "file": None, "line": None, "next": "Install it."}})
+        return done("Could not run the tests.", status="fail")
+
+    script = play(monkeypatch, Script(lead=lead("developer", "tester"), developer=lambda r, p: (write("src/cart.py", "def total(lines):\n    return 1\n")(r), done())[1], tester=tester))
+    start(auth, project, "Make the cart total work")
+    agree(auth, wait("pick"))
+    run = wait("done")
+    assert script.calls == ["lead", "developer", "tester"]  # no fix rounds
+    assert run.untested and run.public()["untested"] is True
+    assert "**Result:** done, not tested" in run.summary
+
+
+def test_real_test_failures_still_send_the_developer_back(auth, project, monkeypatch):
+    calls = [lambda r, p: done("cart test fails", status="fail"), lambda r, p: done("all pass")]
+    script = play(monkeypatch, Script(lead=lead("developer", "tester"), tester=calls))
+    start(auth, project, "Make the cart total work")
+    agree(auth, wait("pick"))
+    run = wait("done")
+    assert script.calls == ["lead", "developer", "tester", "developer", "tester"]
+    assert not run.untested and "**Result:** done\n" in run.summary
+
+
 def test_one_run_at_a_time_and_stop(auth, project, monkeypatch):
     play(monkeypatch, Script(lead=lead("developer")))
     run = start(auth, project, "One thing")

@@ -127,7 +127,7 @@ export function TeamRunCard({ run }: { run: TeamRun }): JSX.Element {
       <header className="trh">
         <b>Team</b>
         <span className="trreq">{run.request}</span>
-        <span className={`chip ${run.state === 'done' ? 'ok' : run.state === 'failed' ? 'bad' : ''}`}>{STATE_LABEL[run.state]}</span>
+        <span className={`chip ${run.state === 'done' ? (run.untested ? 'warn' : 'ok') : run.state === 'failed' ? 'bad' : ''}`}>{run.state === 'done' && run.untested ? 'Done, not tested' : STATE_LABEL[run.state]}</span>
         {!ended && (
           <button className="btn sm" onClick={() => void stop()} title="Stop the team">
             Stop
@@ -224,9 +224,9 @@ export function TeamRunCard({ run }: { run: TeamRun }): JSX.Element {
           )}
           {[...new Set(run.stages.flatMap((s) => s.result.didNotRun ?? []))].length > 0 && (
             <div className="cc warn" role="status">
-              <b>Some checks could not run</b>
+              <b>{run.untested ? 'The tests could not run, so this change is not tested' : 'Some checks could not run'}</b>
               <div>{[...new Set(run.stages.flatMap((s) => s.result.didNotRun ?? []))].join('. ')}</div>
-              <div><i>Next</i>Install the project's packages, then ask the team to test again. The team cannot install packages.</div>
+              <div><i>Next</i>Install what is missing, or add a test command, then ask the team to test again. The team cannot install packages.</div>
             </div>
           )}
           {run.stages.filter((s) => s.putBack.length).map((s, i) => (

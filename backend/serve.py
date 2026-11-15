@@ -31,10 +31,13 @@ def main() -> None:
     parser.add_argument("--port", type=int)
     args = parser.parse_args()
 
+    from visualizer.config import config_dir, config_path, load_config, save_config
+
+    # The database lives in this folder, and migrate runs before anything else would create it.
+    os.makedirs(config_dir(), exist_ok=True)
+
     django.setup()
     from django.core.management import call_command
-
-    from visualizer.config import config_path, load_config, save_config
 
     call_command("migrate", verbosity=0, interactive=False)
     from visualizer.hub import hub

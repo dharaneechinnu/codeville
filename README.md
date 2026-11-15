@@ -13,7 +13,7 @@ block per file), a walking shopper that runs your tests, and short messages that
 
 | Widget | What it does |
 |---|---|
-| Chat | Type a prompt and send it to Claude Code. Shows what the agent did: edits, tools, sub-agents. |
+| Chat | Type a prompt and send it to Claude Code or another AI engine. Your prompt shows at once, the answer is written as it arrives (headings, lists, tables, code blocks with Copy), and each turn lists what the agent did. Esc stops, ↑ brings back your last prompt, and a failed turn has Try again. When Claude Code is stopped because a command needs your OK, **Allow and continue** lets it run those exact commands for the next reply only. |
 | Visualizer | **Build**: the 3D town; click a block to see the file and open it. **Flow**: the kind of app this is and its user flow, step by step, with the files behind each step. **Test**: a shopper walks the test steps and stops at the one that fails. Rotate, zoom and reset in both. |
 | Files | The project by feature or by folder, with git badges. |
 | Source control | Stage, commit, commit and push, push. Failures say what broke and the next step. |
@@ -260,7 +260,9 @@ Tester, Security reviewer and Deployment. A typo fix uses the Developer alone; a
    Team page turns this off).
 3. The picked agents work one after another. Each one's last reply is a handoff note for the next, saved in
    `.codeville/team/<run>/` inside the project (kept out of git).
-4. If the Tester's tests fail, the Developer is sent back, at most twice. A high security finding waits for you.
+4. If the Tester's tests fail, the Developer is sent back, at most twice. When the tests cannot run at all (a missing
+   package, for example), nobody is sent back: the run ends as **Done, not tested** and says what to install. A high
+   security finding waits for you.
 5. When Deployment was called, Codeville commits the files the team changed. You push.
 
 What Codeville enforces, whatever the agents are told (`backend/visualizer/team.py`):
